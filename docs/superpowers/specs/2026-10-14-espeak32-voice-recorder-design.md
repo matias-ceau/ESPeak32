@@ -6,8 +6,9 @@
 
 ## 1. Purpose and intent
 
-Build a credit-card-sized voice-note recorder in the spirit of the Plaud Note,
-using only parts the author already owns. The user presses a button, speaks,
+Build a pocket-sized voice-note recorder in the spirit of the Plaud Note,
+housed in an empty compact-cassette shell and using only parts the author
+already owns. The user presses a button, speaks,
 and the device records and goes back to sleep. Later, an Android companion app
 pulls the recordings over Bluetooth Low Energy (BLE), transcribes them, and
 produces a summary using cloud inference through OpenRouter.
@@ -17,13 +18,13 @@ build data, ESP32 firmware, and, as its main part, the companion phone app.
 
 **Success criteria**
 
-1. A card-sized prototype records a voice note, and the note survives power-off
-   and deep sleep.
+1. A prototype built into a cassette shell records a voice note, and the note
+   survives power-off and deep sleep.
 2. The phone app syncs the note over BLE without data loss, even if the link
    drops mid-transfer.
 3. The app produces a transcript and a summary of the note through OpenRouter.
-4. The finished device fits roughly within a metal card holder footprint
-   (target in section 6.4).
+4. The finished device fits inside a standard compact-cassette shell used as its
+   enclosure (budget in section 6.4).
 5. Everything needed to rebuild it (BOM, wiring, firmware, app) is in the repo.
 
 ## 2. Decisions
@@ -35,7 +36,8 @@ build data, ESP32 firmware, and, as its main part, the companion phone app.
 | Architecture | Store-and-sync over BLE: record to local storage, deep sleep, sync on demand. The transfer protocol is transport-agnostic so a Wi-Fi bulk channel can be added later. |
 | App stack | Progressive web app (PWA) in TypeScript using Web Bluetooth, served over HTTPS (GitHub Pages) and run in Chrome on Android. Foreground sync only in v1. A Capacitor wrapper is the upgrade path for background sync. |
 | Microphone | INMP441 (I2S MEMS) is primary. MAX9814 (analog, auto gain) is the fallback. KY-037/038 and LM393 sound sensors are not audio-grade and are not used. |
-| Boards | Develop on ESP32-S3. The card build uses an ESP32-C3 SuperMini or an S3 mini. Firmware targets both chips. The classic ESP32 DevKit is a spare (too large). The S3 camera/SD board is an optional long-recording variant; the camera is unused. |
+| Boards | Develop on ESP32-S3. The compact build uses an ESP32-C3 SuperMini or an S3 mini. Firmware targets both chips. The classic ESP32 DevKit is a spare: it may physically fit the shell, but its regulator and power draw make it a poor battery device. The S3 camera/SD board is an optional long-recording variant; the camera is unused. |
+| Enclosure | An empty compact-cassette shell (about 100 x 64 x 12 mm outside), replacing the earlier card-holder size target. Exact internal clearances are measured on the user's shell. |
 | Languages | Firmware in C (ESP-IDF). App in TypeScript. Python for host tooling: protocol reference implementation, `bleak` CLI, test vectors, converters. |
 | Cloud | OpenRouter. Transcription uses an audio-capable chat model via a base64 `input_audio` part (OpenRouter has no Whisper-style endpoint). Summaries use a text chat model. Model IDs are user-configurable. |
 
@@ -167,8 +169,8 @@ OpenRouter audio smoke test.
 
 - **Power:** LiPo -> TP4056-type charger module -> 3.3 V buck -> module 3V3 pin, bypassing the dev-board LDO (and removing power LEDs). The 5 V boost converter is not needed. USB programming is done with the battery disconnected by a slide switch. The battery-sense divider must not consume the deep-sleep budget (high-value divider with a capacitor, or MOSFET-gated).
 - **Wiring:** INMP441 on I2S (BCLK, WS, SD); button on an RTC-capable GPIO for deep-sleep wake; LED through a resistor. Separate pin tables for S3 and C3.
-- **Form-factor budget:** footprint no larger than 86 x 54 mm and thickness 10 mm or less (stretch goal 8 mm). The battery sits beside the board rather than on top, pin headers are removed, and parts are soldered directly to the protoboard. The final numbers come from measuring the user's parts and card holder. A 3 mm Plaud-thin build is not achievable with these parts.
-- **Enclosure:** parametric OpenSCAD for 3D printing, plus a no-printer variant.
+- **Form-factor budget:** everything must fit inside an emptied compact-cassette shell, which is about 100 x 64 x 12 mm outside. After the tape, reels and pressure pad are removed, the usable interior is roughly 94 x 58 mm with about 9–10 mm of clear height; the real figures are measured on the user's shell. Working budget: parts stack no taller than about 8 mm, laid out flat. The battery sits beside the boards rather than on top of them unless the measured stack height allows otherwise. Pin headers are removed and parts are soldered directly to the protoboard where height is tight. A Plaud-thin (3 mm) build is not a goal.
+- **Enclosure:** an empty cassette shell, preferably a screw-assembled one (ultrasonically welded shells have to be cut open). Candidate openings, to be confirmed in M4: the bottom-edge head and pinch-roller openings for the microphone port and USB access, and the reel-hub holes for the button and LED. A small printed insert (parametric OpenSCAD) can hold the boards in place; a no-printer variant uses foam tape and hot glue.
 - **Power figures are measured, not assumed.** Targets: deep sleep in the tens of microamps; recording around 25–40 mA on the C3.
 
 ## 7. Repository layout
@@ -191,7 +193,7 @@ Each milestone gets its own spec, plan and implementation cycle.
 2. **M1 — Mic works:** firmware records to flash on the S3; the recording is dumped to a PC and decoded to WAV with Python. Breadboard hardware v0. If the S3 camera board has an onboard PDM mic (as on XIAO ESP32S3 Sense), it offers a zero-wiring bring-up path.
 3. **M2 — BLE sync:** GATT service and transfer engine; Python `bleak` CLI; PWA sync screen, first against a mock transport and then the real device.
 4. **M3 — Cloud:** transcription and summary pipeline, recordings UI, settings, offline queue.
-5. **M4 — Card build:** C3 port, deep sleep and power measurement, protoboard layout, enclosure, runtime test.
+5. **M4 — Cassette build:** C3 port, deep sleep and power measurement, protoboard layout, cassette-shell enclosure, runtime test.
 6. **M5 — Optional:** Opus as default, SD variant, Wi-Fi bulk channel, Capacitor wrapper.
 
 M0 -> M1 -> M2 is the critical path. M3 can start against recorded test vectors once M0 lands.
@@ -216,7 +218,7 @@ These are cheap experiments to run on real hardware before committing further.
 
 ## 11. Inputs needed from the user (not blocking the design)
 
-- Internal dimensions of the metal card holder (before M4).
+- An emptied cassette shell, or its internal width, depth and clear height, and whether it is screw-assembled or welded (before M4).
 - Exact model or photo of the charger and 3.3 V buck modules (before M4).
 - Exact model of the S3 camera/SD board and whether it has an onboard microphone (before M1, optional).
 - Which of the owned microphones is the "small round thin directional" one, if it is not the INMP441 (optional).
