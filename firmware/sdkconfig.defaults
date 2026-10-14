@@ -3,3 +3,6 @@ CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+# Console on the native USB port (S3 USB-Serial-JTAG). For a UART bridge board, use menuconfig:
+# Component config -> ESP System Settings -> Channel for console output, and raise the baud to 921600.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
