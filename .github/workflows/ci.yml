@@ -1,0 +1,41 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install -e 'tools[dev]'
+      - run: pytest tools/tests -q
+
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S firmware/core -B build/core
+      - run: cmake --build build/core
+      - run: ctest --test-dir build/core --output-on-failure
+
+  firmware-s3:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.4.4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          cd firmware
+          idf.py set-target esp32s3
+          idf.py build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-esp32s3
+          path: |
+            firmware/build/*.bin
+            firmware/build/partition_table/*.bin

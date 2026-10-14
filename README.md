@@ -20,3 +20,14 @@ app/        companion PWA (later milestone)
 
 Audio and text are sent to third-party model providers through OpenRouter for transcription and summarisation.
 Do not dictate identifiable patient information.
+
+## Quick start (M1)
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -e 'tools[dev]'
+.venv/bin/pytest tools/tests -q                        # Python reference + vectors
+cmake -S firmware/core -B build/core && cmake --build build/core && ctest --test-dir build/core
+cd firmware && idf.py set-target esp32s3 && idf.py build    # needs ESP-IDF 5.4
+```
+
+Record, dump and decode a note: see `docs/bringup-m1.md`.
