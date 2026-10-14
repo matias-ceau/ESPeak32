@@ -1,0 +1,43 @@
+menu "ESPeak32"
+
+    config ESPEAK32_PIN_I2S_BCLK
+        int "I2S BCLK GPIO (INMP441 SCK)"
+        default 4
+
+    config ESPEAK32_PIN_I2S_WS
+        int "I2S WS GPIO (INMP441 WS)"
+        default 5
+
+    config ESPEAK32_PIN_I2S_SD
+        int "I2S data-in GPIO (INMP441 SD)"
+        default 6
+
+    config ESPEAK32_PIN_BUTTON
+        int "Record button GPIO (active low, internal pull-up)"
+        default 7
+
+    config ESPEAK32_PIN_LED
+        int "Status LED GPIO"
+        default 8
+
+    config ESPEAK32_MIC_GAIN_SHIFT
+        int "Digital gain as a left shift (0..6)"
+        range 0 6
+        default 2
+
+    choice ESPEAK32_CODEC
+        prompt "Audio codec"
+        default ESPEAK32_CODEC_ADPCM
+
+        config ESPEAK32_CODEC_ADPCM
+            bool "IMA-ADPCM (64 kbps)"
+
+        config ESPEAK32_CODEC_PCM16
+            bool "PCM16 (debug, 256 kbps)"
+    endchoice
+
+    config ESPEAK32_MAX_NOTE_SECONDS
+        int "Maximum note length in seconds"
+        default 300
+
+endmenu

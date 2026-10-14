@@ -1,0 +1,154 @@
+#include "recorder.h"
+
+#include <stdio.h>
+#include <sys/stat.h>
+
+#include "audio_capture.h"
+#include "driver/gpio.h"
+#include "e32_dsp.h"
+#include "e32_writer.h"
+#include "esp_log.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "sdkconfig.h"
+#include "store.h"
+
+#define SLOTS_PER_READ 320
+#define SAMPLE_RATE 16000
+#define FREE_HEADROOM_BYTES (64 * 1024)
+#define SILENCE_CHECK_SAMPLES (2 * SAMPLE_RATE)
+#define SILENCE_PEAK 2
+
+#ifdef CONFIG_ESPEAK32_CODEC_PCM16
+#define CODEC E32_CODEC_PCM16
+#else
+#define CODEC E32_CODEC_ADPCM
+#endif
+
+static const char *TAG = "rec";
+static volatile bool s_recording;
+
+bool recorder_is_recording(void) { return s_recording; }
+
+static bool button_down(void) { return gpio_get_level(CONFIG_ESPEAK32_PIN_BUTTON) == 0; }
+static void led(int on) { gpio_set_level(CONFIG_ESPEAK32_PIN_LED, on); }
+
+static void blink_error(void) {
+  for (int i = 0; i < 15; i++) {
+    led(i & 1);
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+  led(0);
+}
+
+static void record_one_note(void) {
+  static e32_writer_t writer;
+  static e32_dsp_t dsp;
+  static int32_t slots[SLOTS_PER_READ];
+  static int16_t pcm[SLOTS_PER_READ];
+
+  uint32_t id = store_next_file_id();
+  e32_sink_t sink;
+  void *handle = NULL;
+  if (id == 0 || !store_sink_open(id, &sink, &handle)) {
+    ESP_LOGE(TAG, "cannot create note file");
+    blink_error();
+    return;
+  }
+  if (e32_writer_open(&writer, CODEC, SAMPLE_RATE, id, store_boot_id(), (uint64_t)esp_timer_get_time(),
+                      sink) != 0) {
+    ESP_LOGE(TAG, "writer open failed");
+    store_sink_close(handle);
+    blink_error();
+    return;
+  }
+  e32_dsp_init(&dsp, CONFIG_ESPEAK32_MIC_GAIN_SHIFT);
+
+  uint64_t total = 0;
+  int16_t early_peak = 0;
+  bool silence_checked = false, released = false, failed = false;
+  int down_ticks = 0;
+  s_recording = true;
+  led(1);
+  ESP_LOGI(TAG, "recording note id=%u", (unsigned)id);
+
+  while (true) {
+    int n = audio_capture_read(slots, SLOTS_PER_READ, 100);
+    if (n < 0) {
+      ESP_LOGE(TAG, "audio read failed");
+      failed = true;
+      break;
+    }
+    if (n > 0) {
+      e32_dsp_process(&dsp, slots, pcm, (size_t)n);
+      if (!silence_checked) {
+        int16_t p = e32_peak_abs(pcm, (size_t)n);
+        if (p > early_peak) early_peak = p;
+      }
+      if (e32_writer_push(&writer, pcm, (size_t)n) != 0) {
+        ESP_LOGE(TAG, "storage write failed (full?)");
+        failed = true;
+        break;
+      }
+      total += (uint64_t)n;
+      if (!silence_checked && total >= SILENCE_CHECK_SAMPLES) {
+        silence_checked = true;
+        if (early_peak <= SILENCE_PEAK)
+          ESP_LOGW(TAG, "mic appears silent - check wiring (SD, WS, BCLK, and L/R tied to GND)");
+      }
+    }
+    if (total >= (uint64_t)CONFIG_ESPEAK32_MAX_NOTE_SECONDS * SAMPLE_RATE) {
+      ESP_LOGW(TAG, "maximum note length reached");
+      break;
+    }
+    if (store_free_bytes() < FREE_HEADROOM_BYTES) {
+      ESP_LOGW(TAG, "storage nearly full, stopping");
+      failed = true;
+      break;
+    }
+    if (button_down()) {
+      if (released && ++down_ticks >= 2) break;
+    } else {
+      released = true;
+      down_ticks = 0;
+    }
+  }
+
+  int rc = e32_writer_close(&writer);
+  store_sink_close(handle);
+  s_recording = false;
+  led(0);
+  char path[48];
+  struct stat st = {0};
+  if (store_path(id, path, sizeof path)) stat(path, &st);
+  ESP_LOGI(TAG, "saved note id=%u samples=%llu bytes=%u%s", (unsigned)id, (unsigned long long)total,
+           (unsigned)st.st_size, rc ? " (finalize error)" : "");
+  if (failed || rc) blink_error();
+}
+
+void recorder_run(void) {
+  gpio_config_t btn = {
+      .pin_bit_mask = 1ULL << CONFIG_ESPEAK32_PIN_BUTTON,
+      .mode = GPIO_MODE_INPUT,
+      .pull_up_en = GPIO_PULLUP_ENABLE,
+  };
+  gpio_config(&btn);
+  gpio_config_t out = {
+      .pin_bit_mask = 1ULL << CONFIG_ESPEAK32_PIN_LED,
+      .mode = GPIO_MODE_OUTPUT,
+  };
+  gpio_config(&out);
+  led(0);
+
+  static int32_t drain[SLOTS_PER_READ];
+  while (true) {
+    int stable = 0;
+    while (stable < 3) { /* 30 ms debounce */
+      audio_capture_read(drain, SLOTS_PER_READ, 10); /* keep the DMA ring drained while idle */
+      stable = button_down() ? stable + 1 : 0;
+    }
+    record_one_note();
+    while (button_down()) vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
