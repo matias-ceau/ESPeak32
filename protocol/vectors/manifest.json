@@ -1,0 +1,41 @@
+{
+  "signal": "int(9000*sin(2pi*440n/16000) + 3000*sin(2pi*1230n/16000)), n=0..15999",
+  "files": [
+    {
+      "name": "tone_16k.adpcm.e32",
+      "codec": 1,
+      "sample_rate": 16000,
+      "sample_count": 16000,
+      "finalized": true,
+      "payload_crc32": "0x92443f7c",
+      "bytes": 8288
+    },
+    {
+      "name": "tone_16k.pcm16.e32",
+      "codec": 0,
+      "sample_rate": 16000,
+      "sample_count": 16000,
+      "finalized": true,
+      "payload_crc32": "0xcf4035f8",
+      "bytes": 32158
+    },
+    {
+      "name": "empty.e32",
+      "codec": 1,
+      "sample_rate": 16000,
+      "sample_count": 0,
+      "finalized": true,
+      "payload_crc32": "0x00000000",
+      "bytes": 32
+    },
+    {
+      "name": "tone_16k.unfinalized.e32",
+      "codec": 1,
+      "sample_rate": 16000,
+      "sample_count": 4294967295,
+      "finalized": false,
+      "payload_crc32": "0x00000000",
+      "bytes": 8160
+    }
+  ]
+}
