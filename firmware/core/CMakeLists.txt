@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(E32_SRCS src/e32_crc32.c src/e32_container.c src/e32_adpcm.c)
+set(E32_SRCS src/e32_crc32.c src/e32_container.c src/e32_adpcm.c src/e32_dsp.c src/e32_writer.c)
 
 if(DEFINED ENV{IDF_PATH})
   idf_component_register(SRCS ${E32_SRCS} INCLUDE_DIRS include)
@@ -14,7 +14,7 @@ else()
 
   enable_testing()
   get_filename_component(E32_VECTOR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../protocol/vectors" ABSOLUTE)
-  foreach(t test_crc32 test_container test_adpcm)
+  foreach(t test_crc32 test_container test_adpcm test_dsp test_writer)
     add_executable(${t} test/${t}.c)
     target_link_libraries(${t} e32core)
     target_compile_options(${t} PRIVATE -Wall -Wextra -Werror)
