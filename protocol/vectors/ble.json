@@ -1,0 +1,127 @@
+[
+  {
+    "name": "info",
+    "hex": "015700010003a02526000500000040420f000000000003000000",
+    "decoded": {
+      "proto_version": 1,
+      "battery_pct": 87,
+      "fw": [
+        0,
+        1,
+        0
+      ],
+      "codecs_mask": 3,
+      "free_bytes": 2500000,
+      "boot_id": 5,
+      "ticks_us": 1000000,
+      "file_count": 3
+    }
+  },
+  {
+    "name": "req_list",
+    "hex": "01",
+    "decoded": null
+  },
+  {
+    "name": "req_get",
+    "hex": "0207000000000100000800",
+    "decoded": null
+  },
+  {
+    "name": "req_credit",
+    "hex": "030300",
+    "decoded": null
+  },
+  {
+    "name": "req_delete",
+    "hex": "0409000000",
+    "decoded": null
+  },
+  {
+    "name": "req_set_time",
+    "hex": "050807060504030201",
+    "decoded": null
+  },
+  {
+    "name": "req_abort",
+    "hex": "06",
+    "decoded": null
+  },
+  {
+    "name": "ctrl_ListEntry",
+    "hex": "81000000020005000000e803000001030000004d00000000000000",
+    "decoded": {
+      "index": 0,
+      "total": 2,
+      "file_id": 5,
+      "size": 1000,
+      "codec": 1,
+      "boot_id": 3,
+      "start_us": 77
+    }
+  },
+  {
+    "name": "ctrl_ListEntry",
+    "hex": "810000000000",
+    "decoded": {
+      "index": 0,
+      "total": 0,
+      "file_id": 0,
+      "size": 0,
+      "codec": 0,
+      "boot_id": 0,
+      "start_us": 0
+    }
+  },
+  {
+    "name": "ctrl_GetAck",
+    "hex": "820005000000e8030000",
+    "decoded": {
+      "file_id": 5,
+      "total_size": 1000
+    }
+  },
+  {
+    "name": "ctrl_DeleteAck",
+    "hex": "840005000000",
+    "decoded": {
+      "file_id": 5
+    }
+  },
+  {
+    "name": "ctrl_SetTimeAck",
+    "hex": "850015cd5b0700000000",
+    "decoded": {
+      "ticks_us": 123456789
+    }
+  },
+  {
+    "name": "ctrl_AbortAck",
+    "hex": "8600",
+    "decoded": {}
+  },
+  {
+    "name": "ctrl_TransferDone",
+    "hex": "830005000000bebafeca",
+    "decoded": {
+      "file_id": 5,
+      "file_crc32": 3405691582
+    }
+  },
+  {
+    "name": "ctrl_ErrorAck",
+    "hex": "8203",
+    "decoded": {
+      "op": 2,
+      "status": 3
+    }
+  },
+  {
+    "name": "data_chunk",
+    "hex": "ffff6162",
+    "decoded": {
+      "seq": 65535,
+      "payload": "6162"
+    }
+  }
+]
