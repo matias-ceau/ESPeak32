@@ -103,3 +103,42 @@ def test_cli_dump_corruption_exits_3_and_writes_nothing(tmp_path):
     rc = main(["dump", "--port", "X", "--id", "1", "-o", str(out)],
               open_port=lambda name, baud: FakeSerial(lines))
     assert rc == 3 and not out.exists()
+
+
+def test_parse_dump_rejects_wrong_file_id():
+    with pytest.raises(DumpError, match="id"):
+        parse_dump(format_dump(DATA, 1), file_id=2)
+
+
+def test_parse_dump_restarts_on_second_begin():
+    stale = format_dump(b"stale-bytes" * 20, 1)[:-1]  # interrupted earlier dump, no END
+    assert parse_dump(stale + format_dump(DATA, 1), file_id=1) == DATA
+
+
+def test_fetch_file_flushes_stale_input_first():
+    class Port(FakeSerial):
+        def reset_input_buffer(self):
+            self.lines = []
+            self.lines = [ln.encode() + b"\n" for ln in format_dump(DATA, 2)]
+
+    port = Port(format_dump(b"other file" * 30, 1))
+    assert fetch_file(port, 2) == DATA
+
+
+def test_cli_dump_decode_rejects_crc_mismatch(tmp_path):
+    from espeak32.container import parse
+
+    bad = bytearray(DATA)
+    bad[40] ^= 0x01
+    assert parse(bytes(bad)).crc_ok is False
+    out, wav = tmp_path / "n.e32", tmp_path / "n.wav"
+    rc = main(["dump", "--port", "X", "--id", "1", "-o", str(out), "--decode", str(wav)],
+              open_port=lambda n, b: FakeSerial(format_dump(bytes(bad), 1)))
+    assert rc == 2 and not wav.exists()
+
+
+def test_cli_decode_short_file_reports_clean_error(tmp_path, capsys):
+    src = tmp_path / "z.e32"
+    src.write_bytes(b"")
+    assert main(["decode", str(src), "-o", str(tmp_path / "z.wav")]) == 4
+    assert "error" in capsys.readouterr().err

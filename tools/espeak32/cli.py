@@ -7,20 +7,30 @@ import sys
 from pathlib import Path
 from typing import Callable, Sequence
 
+from .codec import UnsupportedCodec
+from .container import FormatError
 from .decode import decode_e32
 from .serial_dump import DumpError, fetch_file, fetch_ls, remove_file
 from .wav import write_wav
 
 
-def _cmd_decode(args, open_port=None) -> int:
-    result = decode_e32(Path(args.input).read_bytes())
+def _decode_to_wav(data: bytes, output: str, force: bool) -> int:
+    try:
+        result = decode_e32(data)
+    except (FormatError, UnsupportedCodec) as e:
+        print(f"error: cannot decode: {e}", file=sys.stderr)
+        return 4
     for w in result.warnings:
         print(f"warning: {w}", file=sys.stderr)
-    if result.crc_ok is False and not args.force:
+    if result.crc_ok is False and not force:
         print("error: CRC mismatch (use --force to decode anyway)", file=sys.stderr)
         return 2
-    write_wav(args.output, result.samples, result.sample_rate)
+    write_wav(output, result.samples, result.sample_rate)
     return 0
+
+
+def _cmd_decode(args, open_port=None) -> int:
+    return _decode_to_wav(Path(args.input).read_bytes(), args.output, args.force)
 
 
 def _default_open_port(name: str, baud: int):
@@ -47,10 +57,7 @@ def _cmd_dump(args, open_port) -> int:
         return 3
     Path(args.output).write_bytes(data)
     if args.decode:
-        result = decode_e32(data)
-        for w in result.warnings:
-            print(f"warning: {w}", file=sys.stderr)
-        write_wav(args.decode, result.samples, result.sample_rate)
+        return _decode_to_wav(data, args.decode, False)
     return 0
 
 

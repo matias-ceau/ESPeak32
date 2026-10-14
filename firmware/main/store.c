@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "esp_littlefs.h"
 #include "esp_log.h"
@@ -18,12 +19,22 @@ static int sink_append(void *ctx, const uint8_t *data, size_t len) {
   return fwrite(data, 1, len, (FILE *)ctx) == len ? 0 : 1;
 }
 
+/* LittleFS cannot overwrite in place: rewriting offset 0 copies the rest of the file into new blocks, which needs
+ * about file-size bytes free. Commit what exists first so a failed or skipped finalize leaves a decodable
+ * (unfinalized) note, and only attempt the rewrite when the copy fits. */
+#define FINALIZE_HEADROOM (64 * 1024)
+
 static int sink_rewrite_header(void *ctx, const uint8_t header[E32_HEADER_BYTES]) {
   FILE *f = ctx;
-  if (fflush(f) != 0 || fseek(f, 0, SEEK_SET) != 0) return 1;
+  if (fflush(f) != 0 || fsync(fileno(f)) != 0) return 1;
+  long len = ftell(f);
+  if (len < 0 || store_free_bytes() < (size_t)len + FINALIZE_HEADROOM) {
+    ESP_LOGW(TAG, "not enough free space to finalize header; note left unfinalized (still decodable)");
+    return 1;
+  }
+  if (fseek(f, 0, SEEK_SET) != 0) return 1;
   if (fwrite(header, 1, E32_HEADER_BYTES, f) != E32_HEADER_BYTES) return 1;
-  if (fflush(f) != 0) return 1;
-  fseek(f, 0, SEEK_END);
+  if (fflush(f) != 0 || fseek(f, 0, SEEK_END) != 0 || fsync(fileno(f)) != 0) return 1;
   return 0;
 }
 
@@ -53,6 +64,20 @@ esp_err_t store_init(void) {
   };
   err = esp_vfs_littlefs_register(&conf);
   if (err != ESP_OK) return err;
+  /* never reuse an id that already has a file, even if NVS was erased */
+  uint32_t ids[128];
+  size_t n = store_list(ids, 128);
+  if (n > 0) {
+    uint32_t want = ids[n - 1] + 1, have = 1;
+    if (nvs_open("e32", NVS_READWRITE, &h) == ESP_OK) {
+      nvs_get_u32(h, "next_id", &have);
+      if (have < want) {
+        nvs_set_u32(h, "next_id", want);
+        nvs_commit(h);
+      }
+      nvs_close(h);
+    }
+  }
   ESP_LOGI(TAG, "mounted %s, boot_id=%u, free=%u bytes", BASE, (unsigned)s_boot_id,
            (unsigned)store_free_bytes());
   return ESP_OK;
@@ -78,7 +103,7 @@ bool store_path(uint32_t id, char *out, size_t out_len) {
 bool store_sink_open(uint32_t file_id, e32_sink_t *sink, void **handle) {
   char path[48];
   if (!store_path(file_id, path, sizeof path)) return false;
-  FILE *f = fopen(path, "w+b");
+  FILE *f = fopen(path, "w+bx")  /* exclusive: never truncate an existing note */;
   if (!f) return false;
   sink->append = sink_append;
   sink->rewrite_header = sink_rewrite_header;
@@ -88,7 +113,12 @@ bool store_sink_open(uint32_t file_id, e32_sink_t *sink, void **handle) {
 }
 
 void store_sink_close(void *handle) {
-  if (handle) fclose((FILE *)handle);
+  if (handle && fclose((FILE *)handle) != 0) ESP_LOGE(TAG, "fclose failed; note may be incomplete");
+}
+
+bool store_sink_sync(void *handle) {
+  FILE *f = handle;
+  return f && fflush(f) == 0 && fsync(fileno(f)) == 0;
 }
 
 size_t store_free_bytes(void) {

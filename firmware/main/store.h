@@ -14,6 +14,8 @@ uint32_t store_next_file_id(void);
 /* Creates /audio/%08u.e32 ("w+b"). `handle` is the FILE* behind the sink. */
 bool store_sink_open(uint32_t file_id, e32_sink_t *sink, void **handle);
 void store_sink_close(void *handle);
+/* Commits written data to flash so a power cut keeps a decodable (unfinalized) note. */
+bool store_sink_sync(void *handle);
 size_t store_free_bytes(void);
 /* Ascending ids; returns the count. */
 size_t store_list(uint32_t *ids, size_t max);

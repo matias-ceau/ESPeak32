@@ -24,3 +24,10 @@ Goal: an intelligible voice note on your PC, produced end to end.
 | `espeak32 dump` exits 3 | Dump was corrupted or interrupted; run it again (nothing is written on failure) |
 | Dump very slow | UART bridge at 115200 baud; use 921600 or the native USB port |
 | Note not listed after a long recording | Storage nearly full stops a note at 64 KiB free; delete with `espeak32 rm` |
+
+## Extra checks for the storage layer (not covered by host tests)
+
+- **Power cut:** start a note, speak for ~20 s, pull the USB cable mid-note, reconnect. `espeak32 ls` should list the
+  note; `espeak32 dump ... --decode` should decode most of it with the warning "file not finalized".
+- **Long notes:** LittleFS finalizes by copying the file, so a note can only be finalized while free space is at least
+  its own size plus 64 KiB. Otherwise the log says "note left unfinalized"; the audio is still decodable.

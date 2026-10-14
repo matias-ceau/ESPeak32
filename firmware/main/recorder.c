@@ -15,6 +15,7 @@
 #include "store.h"
 
 #define SLOTS_PER_READ 320
+#define LOOPS_PER_SECOND 50 /* 320 samples at 16 kHz = 20 ms */
 #define SAMPLE_RATE 16000
 #define FREE_HEADROOM_BYTES (64 * 1024)
 #define SILENCE_CHECK_SAMPLES (2 * SAMPLE_RATE)
@@ -69,6 +70,7 @@ static void record_one_note(void) {
   int16_t early_peak = 0;
   bool silence_checked = false, released = false, failed = false;
   int down_ticks = 0;
+  unsigned loops = 0;
   s_recording = true;
   led(1);
   ESP_LOGI(TAG, "recording note id=%u", (unsigned)id);
@@ -102,10 +104,17 @@ static void record_one_note(void) {
       ESP_LOGW(TAG, "maximum note length reached");
       break;
     }
-    if (store_free_bytes() < FREE_HEADROOM_BYTES) {
-      ESP_LOGW(TAG, "storage nearly full, stopping");
-      failed = true;
-      break;
+    if (++loops % LOOPS_PER_SECOND == 0) { /* free-space query and flash commit are slow: once a second */
+      if (!store_sink_sync(handle)) {
+        ESP_LOGE(TAG, "flash sync failed");
+        failed = true;
+        break;
+      }
+      if (store_free_bytes() < FREE_HEADROOM_BYTES) {
+        ESP_LOGW(TAG, "storage nearly full, stopping");
+        failed = true;
+        break;
+      }
     }
     if (button_down()) {
       if (released && ++down_ticks >= 2) break;

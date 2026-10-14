@@ -23,7 +23,7 @@ def format_dump(data: bytes, file_id: int) -> list[str]:
     return lines
 
 
-def parse_dump(lines: Iterable[str]) -> bytes:
+def parse_dump(lines: Iterable[str], file_id: int | None = None) -> bytes:
     expected: int | None = None
     buf = bytearray()
     end_crc: int | None = None
@@ -35,16 +35,19 @@ def parse_dump(lines: Iterable[str]) -> bytes:
         kind = parts[1]
         if kind == "ERR":
             raise DumpError(f"device error: {parts[2] if len(parts) > 2 else 'unknown'}")
-        if kind == "BEGIN":
-            expected = int(parts[3])
-        elif kind == "D":
-            try:
+        try:
+            if kind == "BEGIN":
+                if file_id is not None and int(parts[2]) != file_id:
+                    raise DumpError(f"dump is for id {parts[2]}, expected id {file_id}")
+                expected = int(parts[3])
+                buf = bytearray()  # a second BEGIN means an earlier dump was cut off
+            elif kind == "D":
                 buf += base64.b64decode(parts[2], validate=True)
-            except (binascii.Error, IndexError) as e:
-                raise DumpError(f"bad base64 data line: {e}") from e
-        elif kind == "END":
-            end_crc = int(parts[2], 16)
-            break
+            elif kind == "END":
+                end_crc = int(parts[2], 16)
+                break
+        except (binascii.Error, ValueError, IndexError) as e:
+            raise DumpError(f"malformed line {line!r}: {e}") from e
     if expected is None or end_crc is None:
         raise DumpError("dump incomplete (missing BEGIN or END)")
     if len(buf) != expected:
@@ -84,9 +87,11 @@ def fetch_ls(port) -> list[tuple[int, int]]:
 
 
 def fetch_file(port, file_id: int) -> bytes:
+    if hasattr(port, "reset_input_buffer"):
+        port.reset_input_buffer()  # drop leftovers from an earlier, timed-out command
     port.write(f"dump {file_id}\n".encode())
     lines = _read_until(port, lambda ln: ln.startswith(("E32DUMP END", "E32DUMP ERR")))
-    return parse_dump(lines)
+    return parse_dump(lines, file_id)
 
 
 def remove_file(port, file_id: int) -> None:
