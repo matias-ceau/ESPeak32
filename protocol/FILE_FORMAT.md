@@ -27,3 +27,26 @@ PCM16 frames carry up to 512 bytes (256 samples; the last frame may be shorter).
 The writer appends an unfinalized header, then frames, then rewrites the header with the real `sample_count` and CRC.
 A file whose header is still unfinalized (power loss) is decodable from its complete frames; there is no CRC check.
 An empty note is a finalized 32-byte header with `sample_count = 0` and CRC `0`.
+
+## PCM16 (codec 0)
+
+Raw little-endian signed 16-bit samples. Each frame holds up to 256 samples (512 bytes); the last frame may be shorter.
+
+## IMA-ADPCM (codec 1)
+
+WAVE format 0x11, mono, block align 256, 505 samples per block. Each frame is one 256-byte block.
+
+- Block header (4 bytes): predictor `i16` = the block's first PCM sample (stored exactly); step index `u8` = encoder
+  index at block start; reserved `0`.
+- Then 252 bytes: byte `i` holds sample `2i+1` in the **low** nibble and sample `2i+2` in the **high** nibble.
+- Tables: standard 89-entry IMA step table (7 … 32767); `INDEX_ADJ = [-1,-1,-1,-1,2,4,6,8]` indexed by `code & 7`;
+  index clamped to 0..88; initial index 0, carried across blocks.
+- Reconstruction (decoder and encoder's own tracking): `d = ((2*(code & 7) + 1) * step) >> 3`;
+  `pred = clamp16(pred - d if code & 8 else pred + d)`. This is FFmpeg's formula, so `ffmpeg` decodes these blocks
+  bit-exactly (the classic shift-based formula does not match).
+- Encoder quantiser: `diff = s - pred; code = min(7, abs(diff) * 4 // step) | (8 if diff < 0 else 0)`.
+- The last block is zero-padded to 505 samples; decoders trim to `sample_count`.
+
+## Opus (codec 2)
+
+Reserved; not implemented yet.
