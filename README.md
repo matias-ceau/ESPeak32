@@ -31,3 +31,16 @@ cd firmware && idf.py set-target esp32s3 && idf.py build    # needs ESP-IDF 5.4
 ```
 
 Record, dump and decode a note: see `docs/bringup-m1.md`.
+
+## Sync over Bluetooth LE from a PC (M2)
+
+```sh
+.venv/bin/pip install -e 'tools[ble]'           # adds bleak
+espeak32 ble scan                                # devices currently advertising
+espeak32 ble info                                # pairs (Just Works) on first use
+espeak32 ble sync --out notes/ --wav             # resumable; keeps the notes on the device
+espeak32 ble sync --out notes/ --delete          # deletes each note only after it is stored and verified
+```
+
+The device is connectable for 60 s after a note is saved, or for 120 s after a 1.5 s press. Exit codes: 0 ok,
+3 protocol or transfer error, 4 no device found.

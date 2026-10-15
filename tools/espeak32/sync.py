@@ -31,15 +31,19 @@ class SyncError(RuntimeError):
     """A failure that reconnecting will not fix."""
 
 
-class _Busy(Exception):
+class NoteSkipped(Exception):
+    """This note cannot be fetched now; the rest of the sync goes on."""
+
+
+class NoteBusy(NoteSkipped):
     pass
 
 
-class _CrcMismatch(Exception):
+class CrcMismatch(NoteSkipped):
     pass
 
 
-class _ReadFailed(Exception):
+class DeviceReadFailed(NoteSkipped):
     pass
 
 
@@ -219,12 +223,12 @@ class SyncClient:
             msg = await self._request(ble.req_get(entry.file_id, offset, self.window))
             if isinstance(msg, ble.ErrorAck):
                 if msg.status == ble.STATUS_BUSY:
-                    raise _Busy()
+                    raise NoteBusy()
                 if msg.status == ble.STATUS_BAD_ARGS and offset:
                     part.unlink()
                     continue
                 if msg.status == ble.STATUS_IO:
-                    raise _ReadFailed()
+                    raise DeviceReadFailed()
                 raise SyncError(f"GET of note {entry.file_id} failed with status {msg.status}")
             if not isinstance(msg, ble.GetAck) or msg.file_id != entry.file_id:
                 raise SyncError(f"unexpected GET answer {msg!r}")
@@ -238,7 +242,7 @@ class SyncClient:
                     ok = False
                 if not ok:
                     part.unlink()
-                    raise _CrcMismatch()
+                    raise CrcMismatch()
                 return data
             resumes += 1
             if resumes > MAX_RESUMES_PER_FETCH:
@@ -260,7 +264,7 @@ class SyncClient:
                     if ch == "ctrl":
                         m = ble.decode_ctrl(msg)
                         if isinstance(m, ble.TransferFailed):
-                            raise _ReadFailed()
+                            raise DeviceReadFailed()
                         if isinstance(m, ble.TransferDone):
                             return m if received == size else None
                         continue
@@ -315,12 +319,12 @@ async def _fetch_verified(client: SyncClient, e: ble.ListEntry, part: Path) -> b
     while True:
         try:
             return await client.fetch(e, part)
-        except _Busy:
+        except NoteBusy:
             return "busy (recording)"
-        except _CrcMismatch:
+        except CrcMismatch:
             if retried:
                 return "crc mismatch after refetch"
-        except _ReadFailed:
+        except DeviceReadFailed:
             if retried:
                 return "read failure on device"
         retried = True
