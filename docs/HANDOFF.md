@@ -10,31 +10,35 @@ want to be asked routine questions: decide, ledger the decision, keep going. **T
 is needed** (wiring, flashing, pressing the button, soldering). Android phone only. Enclosure: empty compact-cassette shell.
 Audio/text go to third-party models via OpenRouter; never put API keys in the repo.
 
-## State
+## State (2026-10-15)
 - M0 (contract) and M1 (mic works) are implemented: `.e32` file format, ADPCM/PCM16 reference codecs, BLE message codec,
-  golden vectors, portable C core (byte-exact against the vectors), ESP-IDF S3 recorder, serial `ls/dump/rm`, PC
-  `espeak32 ls|dump|rm|decode`, CI, bring-up checklist.
-- Local verification: `python3 -m venv .venv && .venv/bin/pip install -e 'tools[dev]' && .venv/bin/pytest tools/tests -q`
-  (65 pass; the ffmpeg oracle test runs if ffmpeg is installed); `cmake -S firmware/core -B build/core && cmake --build
-  build/core && ctest --test-dir build/core` (5 pass).
-- CI (`.github/workflows/ci.yml`): the first run was green on all three jobs including the ESP-IDF 5.4.4 build. Check the
-  run for the last fix commit and fix forward if red.
-- The firmware has **never run on hardware**. Nothing about audio quality, gain, dump speed or power-cut behaviour is
-  verified yet.
+  golden vectors, portable C core, ESP-IDF S3 recorder, serial `ls/dump/rm`, PC `espeak32 ls|dump|rm|decode`, CI,
+  bring-up checklist.
+- M2 (BLE sync) is implemented and tested without hardware (spec `docs/superpowers/specs/2026-10-15-m2-ble-sync-design.md`,
+  plan `docs/superpowers/plans/2026-10-15-m2-ble-sync.md`): protocol behaviour rules in `protocol/PROTOCOL.md`; Python
+  reference device model generating `protocol/vectors/sync.txt`; C transfer engine `e32_xfer` and button classifier
+  `e32_button` (host-tested; the engine replays sync.txt byte for byte); NimBLE GATT service with LE Secure
+  Connections bonding and advertising windows (build-checked only); resumable sync client and `espeak32 ble …` CLI
+  (bleak, optional extra); PWA in `app/` (Vite + TypeScript, IndexedDB, Web Bluetooth, play/save WAV) with unit tests
+  and a Playwright e2e test against a fake `navigator.bluetooth`.
+- Local verification:
+  - Python: `uv venv .venv && uv pip install --python .venv -e 'tools[dev]' && .venv/bin/python -m pytest tools/tests -q`
+    (the ffmpeg oracle test needs ffmpeg >= 9).
+  - C: `cmake -S firmware/core -B build/core && cmake --build build/core && ctest --test-dir build/core` (7 tests).
+  - Firmware: see `docs/DECISIONS.md` for the IDF 5.4.4 command on this machine (Python 3.12 shim).
+  - App: `cd app && npm ci && npm test && npm run build && PW_CHROMIUM=/usr/bin/chromium npx playwright test`.
+- The firmware has **never run on hardware**. Nothing about audio quality, gain, BLE pairing, throughput, dump speed or
+  power-cut behaviour is verified yet.
 
 ## Next, in order
-1. Install ESP-IDF 5.4.x on this machine (or use the `espressif/idf:v5.4.4` container), then with the user follow
-   `docs/bringup-m1.md`: wire per `hardware/wiring-v0-s3.md` (INMP441 L/R -> GND), flash, record, `espeak32 ls`, `dump
-   --decode`, listen to the WAV, run the power-cut check. The console is on the native USB port (USB-Serial-JTAG);
-   opening the port with pyserial may reset the chip (DTR/RTS) - check. Record numbers in `docs/measurements.md`.
-2. Fix whatever the hardware shows (gain shift, silent-mic detection, dropouts, dump speed), test-first where possible.
-3. M2: BLE sync. Brainstorm (superpowers:brainstorming) -> spec -> plan (superpowers:writing-plans) -> execute inline
-   with TDD (superpowers:executing-plans) -> one fresh whole-branch review. Scope: NimBLE GATT service + transfer engine
-   (credit-windowed GET, resume by offset, CRC, two-phase delete, SET_TIME, encrypted link, advertising windows), Python
-   `bleak` CLI, then the TypeScript PWA (Web Bluetooth) tested against a mocked transport using `protocol/vectors/ble.json`.
-   Contract: `protocol/PROTOCOL.md`, `protocol/FILE_FORMAT.md`, `tools/espeak32/ble.py`.
-4. Later milestones are in the spec section 8 (M3 cloud transcription via OpenRouter `input_audio`, M4 cassette build -
-   ask the user for the shell's internal dimensions and photos of their charger/buck modules before then).
+1. With the user: `docs/bringup-m1.md` (wire, flash, record, dump, listen, power-cut check), then `docs/bringup-m2.md`
+   (pair, sync from PC and phone, resume after a drop, two-phase delete, long press, bond reset). Record numbers in
+   `docs/measurements.md`. Console is on the native USB port; opening it with pyserial may reset the chip (DTR/RTS).
+2. Fix whatever the hardware shows (gain, silent-mic detection, dropouts, MTU timing, mbuf pool, window size),
+   test-first where possible.
+3. M3: transcription and summary through OpenRouter (`input_audio`), recordings UI, settings, offline queue. Spec
+   section 8; needs a live API key from the user for the format/size-limit spike (spec risk 5).
+4. M4 cassette build: ask the user for the shell's internal dimensions and photos of their charger/buck modules first.
 
 ## Rulings already made
 Later decisions are in `docs/DECISIONS.md`.
@@ -49,8 +53,7 @@ Later decisions are in `docs/DECISIONS.md`.
 
 ## Deferred minors (from the final review)
 Stuck-high mic data line not flagged as silent; `ls`/`rmall` capped at 128 notes; failed mount silently formats the
-partition; a failed TRANSFER_DONE decodes ambiguously in
-`ble.py`; USB-CDC console falls into the UART branch in `console.c`.
+partition; USB-CDC console falls into the UART branch in `console.c`.
 
 ## Not done on purpose (spec items for later)
 Audio before the button press (first word), LED patterns for low battery/storage full, deep sleep and the long-press
