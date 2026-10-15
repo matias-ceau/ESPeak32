@@ -1,4 +1,4 @@
-"""Reference codecs: IMA-ADPCM (WAVE 0x11 blocks, FFmpeg-exact reconstruction) and PCM16."""
+"""Reference codecs: IMA-ADPCM (WAVE 0x11 blocks, reference IMA shift arithmetic) and PCM16."""
 
 from __future__ import annotations
 
@@ -31,10 +31,27 @@ def _clamp(v: int, lo: int, hi: int) -> int:
 
 
 def _reconstruct(pred: int, index: int, code: int) -> tuple[int, int]:
-    d = ((2 * (code & 7) + 1) * STEP[index]) >> 3
+    step = STEP[index]
+    d = step >> 3
+    if code & 4:
+        d += step
+    if code & 2:
+        d += step >> 1
+    if code & 1:
+        d += step >> 2
     pred = _clamp(pred - d if code & 8 else pred + d, -32768, 32767)
     index = _clamp(index + INDEX_ADJ[code & 7], 0, 88)
     return pred, index
+
+
+def _quantise(diff: int, step: int) -> int:
+    code = 8 if diff < 0 else 0
+    diff = abs(diff)
+    for bit, part in ((4, step), (2, step >> 1), (1, step >> 2)):
+        if diff >= part:
+            code |= bit
+            diff -= part
+    return code
 
 
 def adpcm_encode(pcm: Sequence[int]) -> list[bytes]:
@@ -47,8 +64,7 @@ def adpcm_encode(pcm: Sequence[int]) -> list[bytes]:
         out = bytearray(struct.pack("<hBB", pred, index, 0))
         codes = []
         for s in chunk[1:]:
-            diff = s - pred
-            code = min(7, abs(diff) * 4 // STEP[index]) | (8 if diff < 0 else 0)
+            code = _quantise(s - pred, STEP[index])
             pred, index = _reconstruct(pred, index, code)
             codes.append(code)
         for i in range(0, len(codes), 2):

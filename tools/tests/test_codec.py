@@ -1,4 +1,5 @@
 import math
+import re
 import shutil
 import struct
 import subprocess
@@ -32,6 +33,18 @@ def test_adpcm_golden_first_bytes():
     assert block[4] == 0xB4
 
 
+def test_adpcm_decode_uses_reference_ima_reconstruction():
+    # step 7, code 1: reference IMA gives d = (7>>3) + (7>>2) = 1; the old FFmpeg<9 multiply form gives 2.
+    block = bytes(4) + b"\x01" + bytes(BLOCK_BYTES - 5)
+    assert adpcm_decode([block], 3) == [0, 1, 1]
+
+
+def test_adpcm_encode_uses_reference_ima_quantiser():
+    # diff 5 at step 7: successive approximation (7, 3, 1) gives code 3; 5*4//7 would give 2.
+    (block,) = adpcm_encode([0, 5] + [0] * 503)
+    assert block[4] & 0x0F == 3
+
+
 def test_adpcm_silence_is_all_zero():
     (block,) = adpcm_encode([0] * BLOCK_SAMPLES)
     assert block == bytes(256)
@@ -57,7 +70,16 @@ def test_adpcm_roundtrip_snr_at_least_20db():
     assert 10 * math.log10(sig / err) >= 20
 
 
-@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def ffmpeg_major():
+    if shutil.which("ffmpeg") is None:
+        return None
+    out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True).stdout
+    m = re.match(r"ffmpeg version n?(\d+)\.", out)
+    return int(m.group(1)) if m else None
+
+
+# FFmpeg < 9 decodes 4-bit IMA WAV with a multiply form that rounds differently from the IMA reference.
+@pytest.mark.skipif((ffmpeg_major() or 0) < 9, reason="needs ffmpeg >= 9 (reference IMA arithmetic)")
 def test_adpcm_matches_ffmpeg(tmp_path):
     pcm = tone(2020)
     blocks = adpcm_encode(pcm)

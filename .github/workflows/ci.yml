@@ -9,9 +9,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # The ADPCM oracle test needs ffmpeg >= 9 (Ubuntu ships 6.1, which rounds IMA differently).
+      - name: Install ffmpeg 9
+        run: |
+          curl -sSfL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-gpl-9.0.tar.xz | tar -xJ -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/ffmpeg-n9.0-latest-linux64-gpl-9.0/bin" >> "$GITHUB_PATH"
+      - run: ffmpeg -version | head -1
       - run: pip install -e 'tools[dev]'
-      - run: pytest tools/tests -q
+      - run: pytest tools/tests -q -rs
 
   core:
     runs-on: ubuntu-latest

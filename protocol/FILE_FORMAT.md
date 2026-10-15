@@ -41,10 +41,12 @@ WAVE format 0x11, mono, block align 256, 505 samples per block. Each frame is on
 - Then 252 bytes: byte `i` holds sample `2i+1` in the **low** nibble and sample `2i+2` in the **high** nibble.
 - Tables: standard 89-entry IMA step table (7 … 32767); `INDEX_ADJ = [-1,-1,-1,-1,2,4,6,8]` indexed by `code & 7`;
   index clamped to 0..88; initial index 0, carried across blocks.
-- Reconstruction (decoder and encoder's own tracking): `d = ((2*(code & 7) + 1) * step) >> 3`;
-  `pred = clamp16(pred - d if code & 8 else pred + d)`. This is FFmpeg's formula, so `ffmpeg` decodes these blocks
-  bit-exactly (the classic shift-based formula does not match).
-- Encoder quantiser: `diff = s - pred; code = min(7, abs(diff) * 4 // step) | (8 if diff < 0 else 0)`.
+- Reconstruction (decoder and encoder's own tracking) is the reference IMA shift arithmetic:
+  `d = step >> 3; if code & 4: d += step; if code & 2: d += step >> 1; if code & 1: d += step >> 2`;
+  `pred = clamp16(pred - d if code & 8 else pred + d)`. FFmpeg >= 9 decodes these blocks bit-exactly. FFmpeg 6.1-8.x
+  used `((2*(code & 7) + 1) * step) >> 3`, which rounds differently; do not use those versions as an oracle.
+- Encoder quantiser (reference IMA successive approximation): `code = 8 if diff < 0 else 0; diff = abs(diff)`; then for
+  `(bit, part)` in `(4, step), (2, step >> 1), (1, step >> 2)`: if `diff >= part`, set `bit` and subtract `part`.
 - The last block is zero-padded to 505 samples; decoders trim to `sample_count`.
 
 ## Opus (codec 2)

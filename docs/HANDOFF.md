@@ -37,9 +37,11 @@ Audio/text go to third-party models via OpenRouter; never put API keys in the re
    ask the user for the shell's internal dimensions and photos of their charger/buck modules before then).
 
 ## Rulings already made
+Later decisions are in `docs/DECISIONS.md`.
+
 - ESP-IDF's own console-channel choice is used (sdkconfig.defaults: USB-Serial-JTAG), not a duplicate Kconfig choice.
-- ADPCM reconstruction uses FFmpeg's formula `((2*(code&7)+1)*step)>>3` (verified bit-exact with ffmpeg; the classic
-  shift formula does not match).
+- ADPCM uses the reference IMA shift arithmetic (bit-exact with FFmpeg >= 9). It was FFmpeg 6.1's multiply form
+  until 2026-10-15; see `docs/DECISIONS.md` for why it changed.
 - LittleFS cannot rewrite the header in place cheaply (it copies the file). The sink syncs once a second and only
   rewrites the header if free space >= file size + 64 KiB; otherwise the note stays unfinalized (still decodable, no
   CRC). A trailer-based finalization (contract change) was NOT done: revisit if long notes end up unfinalized.
@@ -48,7 +50,7 @@ Audio/text go to third-party models via OpenRouter; never put API keys in the re
 ## Deferred minors (from the final review)
 Stuck-high mic data line not flagged as silent; `ls`/`rmall` capped at 128 notes; failed mount silently formats the
 partition; `joltwallet/littlefs` version unpinned (CI resolved 1.22.3); a failed TRANSFER_DONE decodes ambiguously in
-`ble.py`; `abs()` on int32 in the encoder; USB-CDC console falls into the UART branch in `console.c`.
+`ble.py`; USB-CDC console falls into the UART branch in `console.c`.
 
 ## Not done on purpose (spec items for later)
 Audio before the button press (first word), LED patterns for low battery/storage full, deep sleep and the long-press

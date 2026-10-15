@@ -7,7 +7,7 @@
       "sample_rate": 16000,
       "sample_count": 16000,
       "finalized": true,
-      "payload_crc32": "0x92443f7c",
+      "payload_crc32": "0xe02d26ff",
       "bytes": 8288
     },
     {
