@@ -166,8 +166,12 @@ export interface MockTransportOptions {
   mtu?: number;
   dropAfterChunks?: number;
   dropChunk?: number;
+  /** Lose the chunk with this seq on every GET. */
+  dropSeq?: number;
   corrupt?: (seq: number) => boolean;
   dropOnOp?: number;
+  /** Deliver TRANSFER_DONE ahead of the transfer's last DATA chunk. */
+  doneEarly?: boolean;
   dropBefore?: boolean;
 }
 
@@ -203,13 +207,17 @@ export class MockTransport implements Transport {
           this.drop();
           break;
         }
-        if (idx === this.opts.dropChunk) continue;
         const seq = m[0] | (m[1] << 8);
+        if (idx === this.opts.dropChunk || seq === this.opts.dropSeq) continue;
         if (this.opts.corrupt && m.length > 2 && this.opts.corrupt(seq)) {
           m = m.slice();
           m[2] ^= 1;
         }
         this.dataDelivered++;
+      }
+      if (this.opts.doneEarly && ch === "ctrl" && m[0] === P.EV_TRANSFER_DONE && this.events.at(-1)?.[0] === "data") {
+        this.events.splice(this.events.length - 1, 0, [ch, m]);
+        continue;
       }
       this.events.push([ch, m]);
     }

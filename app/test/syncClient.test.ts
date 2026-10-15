@@ -160,6 +160,23 @@ describe("syncAll", () => {
     credits.forEach((c) => expect(Array.from(c)).toEqual(Array.from(P.reqCredit(8))));
   });
 
+  test("a note that keeps losing chunks is skipped, not fatal", async () => {
+    const dev = device();
+    const { rep } = await run(dev, { connect: connector(dev, [], { dropSeq: 5 }) });
+    expect(rep.skipped).toEqual([[1, "transfer keeps losing chunks"]]);
+    expect(rep.fetched).toEqual([keyOf(2, EMPTY)]);
+    expect(dev.notes.has(1)).toBe(true);
+  });
+
+  test("TRANSFER_DONE overtaking the last chunk is tolerated", async () => {
+    const dev = device();
+    const connect = connector(dev, [], { doneEarly: true });
+    const { rep, db } = await run(dev, { connect });
+    expect(rep.fetched.length).toBe(2);
+    expect((await db.getNote(keyOf(1, TONE)))!.bytes).toEqual(TONE);
+    expect(connect.made[0].writes.filter((w) => w[0] === P.OP_GET).length).toBe(2); // no resume needed
+  });
+
   test("a reused file id with a new header is a new note", async () => {
     const dev = device();
     const db = await Db.open(`s${dbn++}`);

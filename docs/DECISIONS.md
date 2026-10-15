@@ -46,3 +46,18 @@ The user asked for brainstorm → spec → plan → execution while away, decidi
   (7.x is the new native compiler, too fresh).
 - **GitHub Pages deploy only by manual dispatch**: publishing is the user's call.
 - `bleak` is an optional extra (`tools[ble]`); tests never import it.
+
+## 2026-10-15 — M2 final review fixes
+
+A fresh whole-branch review found no critical issue and seven important ones, all fixed:
+- A note that keeps losing chunks is skipped (`transfer keeps losing chunks`) instead of aborting the whole sync.
+- A 200 ms grace after an incomplete TRANSFER_DONE is restored in both clients: under BlueZ, bleak's AcquireNotify
+  uses one socket per characteristic, so CTRL can overtake DATA. bleak is also forced to StartNotify (`bleak>=2.1`).
+- The PWA asks `navigator.storage.persist()` (with delete-after-sync the phone holds the only copy) and warns if refused.
+- The service worker is network-first; the old cache-first one would have frozen the app at its first version.
+- The device starts the MTU exchange itself (`ble_gattc_exchange_mtu`), which needs `CONFIG_BT_NIMBLE_ROLE_CENTRAL=y`
+  because NimBLE ties the GATT client to the central role. The device never scans.
+- Task stacks: id buffers moved off the stacks, host and transfer tasks at 6 KB; free stack is logged at each disconnect.
+- A full event queue now fails the ATT write instead of dropping the request; the queue is reset on disconnect.
+Open question for the user: Just Works pairing is accepted in every advertising window (parent spec 4.6). Limiting new
+bonds to the 120 s long-press window would stop a nearby phone pairing during the 60 s after-note window.

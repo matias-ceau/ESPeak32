@@ -99,3 +99,12 @@ export class Db {
     return this.write("settings", (s) => s.put({ name, value }));
   }
 }
+
+/** Asks the browser not to evict our storage. With delete-after-sync, IndexedDB holds the only copy of a note. */
+export async function requestPersistence(
+  storage: StorageManager | undefined = globalThis.navigator?.storage,
+): Promise<"persisted" | "best-effort" | "unsupported"> {
+  if (!storage?.persist) return "unsupported";
+  if (await storage.persisted()) return "persisted";
+  return (await storage.persist()) ? "persisted" : "best-effort";
+}

@@ -21,7 +21,9 @@ from the device only after it is stored. Do M1 (`docs/bringup-m1.md`) first.
 8. **Long press:** hold the button 1.5 s while idle: no note is created, and the device advertises for 120 s.
 9. **Bond reset:** forget the device on the phone, hold the button 10 s (three quick flashes), pair again.
 
-Write down the phone model, the MTU (`I (…) ble: mtu N` in the monitor log) and the window you used.
+Write down the phone model, the MTU (`I (…) ble: mtu N` in the monitor log; the device asks for 247 itself) and the
+window you used. After each disconnect the log prints how many stack bytes the host and xfer tasks never used; report
+them (anything under about 512 bytes means the stack must grow).
 
 ## Troubleshooting
 

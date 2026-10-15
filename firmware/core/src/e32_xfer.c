@@ -5,8 +5,6 @@
 #include "e32_container.h"
 #include "e32_crc32.h"
 
-#define MAX_LIST 256
-
 enum { OP_LIST = 1, OP_GET, OP_CREDIT, OP_DELETE, OP_SET_TIME, OP_ABORT };
 enum { ST_OK = 0, ST_UNKNOWN_OPCODE, ST_BAD_ARGS, ST_NOT_FOUND, ST_BUSY, ST_MTU, ST_IO };
 #define EV_TRANSFER_DONE 0x83
@@ -58,8 +56,8 @@ void e32_xfer_disconnect(e32_xfer_t *x) {
 }
 
 static void handle_list(e32_xfer_t *x) {
-  uint32_t ids[MAX_LIST];
-  size_t n = x->io->list(x->io->ctx, ids, MAX_LIST);
+  uint32_t *ids = x->list_ids;
+  size_t n = x->io->list(x->io->ctx, ids, E32_XFER_MAX_LIST);
   uint8_t m[2 + 25] = {0x80 | OP_LIST, ST_OK}; /* index u16, total u16, id u32, size u32, codec u8, boot u32, start u64 */
   if (n == 0) {
     memset(m + 2, 0, 4);
@@ -230,7 +228,6 @@ bool e32_xfer_pump(e32_xfer_t *x) {
 }
 
 void e32_xfer_info(e32_xfer_t *x, uint8_t out[E32_XFER_INFO_BYTES]) {
-  uint32_t ids[MAX_LIST];
   out[0] = 1;
   out[1] = x->io->battery_pct(x->io->ctx);
   memcpy(out + 2, x->cfg.fw, 3);
@@ -238,5 +235,5 @@ void e32_xfer_info(e32_xfer_t *x, uint8_t out[E32_XFER_INFO_BYTES]) {
   put32(out + 6, x->io->free_bytes(x->io->ctx));
   put32(out + 10, x->cfg.boot_id);
   put64(out + 14, x->io->now_us(x->io->ctx));
-  put32(out + 22, (uint32_t)x->io->list(x->io->ctx, ids, MAX_LIST));
+  put32(out + 22, (uint32_t)x->io->list(x->io->ctx, x->info_ids, E32_XFER_MAX_LIST));
 }

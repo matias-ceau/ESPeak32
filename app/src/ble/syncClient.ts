@@ -7,6 +7,7 @@ import * as P from "./protocol";
 import { LinkLost, TimeoutError, type Transport } from "./transport";
 
 const CTRL_TIMEOUT_MS = 5000;
+const DONE_GRACE_MS = 200; // a stack may deliver TRANSFER_DONE ahead of the last chunks (CTRL and DATA are separate)
 const MAX_RESUMES_PER_FETCH = 8;
 const SEGMENT_BYTES = 64 * 1024;
 
@@ -15,6 +16,7 @@ class NoteSkipped extends Error {}
 class NoteBusy extends NoteSkipped {}
 class CrcMismatch extends NoteSkipped {}
 class DeviceReadFailed extends NoteSkipped {}
+class KeepsLosingChunks extends NoteSkipped {}
 
 export function noteKey(e: P.ListEntry): string {
   return `${e.fileId}:${e.bootId}:${e.startUs}`;
@@ -177,7 +179,10 @@ export class SyncClient {
         }
         return data;
       }
-      if (++resumes > MAX_RESUMES_PER_FETCH) throw new SyncError(`note ${entry.fileId}: transfer keeps losing chunks`);
+      if (++resumes > MAX_RESUMES_PER_FETCH) {
+        await this.abort();
+        throw new KeepsLosingChunks();
+      }
       await this.abort();
     }
   }
@@ -186,10 +191,11 @@ export class SyncClient {
   private async receive(buf: NoteBuffer, size: number, onProgress: (n: number) => void): Promise<P.CtrlMessage | null> {
     const half = this.window >> 1;
     let expectedSeq = 0, consumed = 0, linkOk = true;
+    let done: P.CtrlMessage | null = null; // arrived before the last chunks
     for (;;) {
       let ev;
       try {
-        ev = await this.t.nextEvent(this.stallMs);
+        ev = await this.t.nextEvent(done ? DONE_GRACE_MS : this.stallMs);
       } catch (e) {
         if (e instanceof TimeoutError) return null;
         throw e;
@@ -197,13 +203,17 @@ export class SyncClient {
       if (ev[0] === "ctrl") {
         const m = P.decodeCtrl(ev[1]);
         if (m.type === "transferFailed") throw new DeviceReadFailed();
-        if (m.type === "transferDone") return buf.length === size ? m : null;
+        if (m.type === "transferDone") {
+          if (buf.length === size) return m;
+          done = m;
+        }
         continue;
       }
       const { seq, payload } = P.unpackDataChunk(ev[1]);
       if (seq !== expectedSeq) return null;
       await buf.push(payload);
       onProgress(buf.length);
+      if (done && buf.length === size) return done;
       expectedSeq = (expectedSeq + 1) & 0xffff;
       if (++consumed >= half && linkOk) {
         consumed = 0;
@@ -226,6 +236,7 @@ async function fetchVerified(c: SyncClient, e: P.ListEntry, db: Db, onProgress: 
       if (err instanceof NoteBusy) return "busy (recording)";
       if (err instanceof CrcMismatch && retried) return "crc mismatch after refetch";
       if (err instanceof DeviceReadFailed && retried) return "read failure on device";
+      if (err instanceof KeepsLosingChunks) return "transfer keeps losing chunks";
       if (!(err instanceof NoteSkipped)) throw err;
     }
   }

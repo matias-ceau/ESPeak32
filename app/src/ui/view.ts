@@ -5,7 +5,7 @@ import { BLOCK_SAMPLES } from "../format/adpcm";
 import { CODEC_ADPCM, parseE32 } from "../format/container";
 import { decodeE32 } from "../format/decode";
 import { wavBytes } from "../format/wav";
-import type { Db, NoteRecord } from "../store/db";
+import { requestPersistence, type Db, type NoteRecord } from "../store/db";
 
 export interface ViewDeps {
   db: Db;
@@ -71,6 +71,7 @@ export async function mountView(root: HTMLElement, deps: ViewDeps): Promise<void
   button.onclick = async () => {
     button.disabled = true;
     status.textContent = "Connecting…";
+    void requestPersistence(); // before notes are deleted from the device, ask Chrome to keep our storage
     let first = true;
     try {
       const rep = await syncAll(() => {
@@ -84,6 +85,9 @@ export async function mountView(root: HTMLElement, deps: ViewDeps): Promise<void
       });
       const skipped = rep.skipped.map(([id, why]) => `note ${id}: ${why}`).join("; ");
       status.textContent = `Synced ${rep.fetched.length} new note(s)` + (skipped ? `. Skipped ${skipped}.` : ".");
+      if (del.checked && (await requestPersistence()) === "best-effort") {
+        status.textContent += " Warning: Chrome may evict stored notes when the phone is low on space; save important ones as WAV.";
+      }
     } catch (e) {
       status.textContent = `Sync failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {

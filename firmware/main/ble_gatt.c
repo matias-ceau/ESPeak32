@@ -26,6 +26,7 @@ void ble_store_config_init(void); /* not exported by a public header in ESP-IDF 
 #define MAX_REQUEST 20
 #define QUEUE_DEPTH 16
 #define SEND_RETRY_MS 5
+#define XFER_STACK 6144
 
 static const char *TAG = "ble";
 
@@ -52,8 +53,11 @@ static volatile uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static volatile bool s_advertising, s_synced;
 static uint8_t s_own_addr_type;
 
-static void post(const ev_t *e) {
-  if (xQueueSend(s_queue, e, 0) != pdTRUE) ESP_LOGW(TAG, "event queue full; event %d dropped", e->type);
+/* Never blocks: the NimBLE host task calls it, and blocking there would stall the mbufs io_send waits for. */
+static bool post(const ev_t *e) {
+  if (xQueueSend(s_queue, e, 0) == pdTRUE) return true;
+  ESP_LOGW(TAG, "event queue full; event %d refused", e->type);
+  return false;
 }
 
 /* ---- transfer engine io ---- */
@@ -136,6 +140,7 @@ static void xfer_task(void *arg) {
           break;
         case EV_DISCONNECT:
           e32_xfer_disconnect(&s_xfer);
+          ESP_LOGI(TAG, "xfer task stack: %u bytes never used", (unsigned)uxTaskGetStackHighWaterMark(NULL));
           break;
       }
       busy = true;
@@ -162,8 +167,7 @@ static int chr_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt 
     if (OS_MBUF_PKTLEN(ctxt->om) > MAX_REQUEST) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
     if (ble_hs_mbuf_to_flat(ctxt->om, e.data, sizeof e.data, &len) != 0) return BLE_ATT_ERR_UNLIKELY;
     e.len = (uint8_t)len;
-    post(&e);
-    return 0;
+    return post(&e) ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES; /* the client sees the write fail instead of a lost request */
   }
   return BLE_ATT_ERR_UNLIKELY;
 }
@@ -225,14 +229,18 @@ static int gap_event(struct ble_gap_event *event, void *arg) {
       s_conn = event->connect.conn_handle;
       e.type = EV_CONNECT;
       e.mtu = ble_att_mtu(s_conn);
-      post(&e);
+      post(&e); /* room is guaranteed: the queue was reset at the last disconnect */
+      /* Ask for a larger MTU ourselves: some centrals (older Android, Web Bluetooth) never start the exchange. */
+      if (ble_gattc_exchange_mtu(s_conn, NULL, NULL) != 0) ESP_LOGW(TAG, "MTU exchange not started");
       ESP_LOGI(TAG, "connected");
       break;
     case BLE_GAP_EVENT_DISCONNECT:
       s_conn = BLE_HS_CONN_HANDLE_NONE;
+      xQueueReset(s_queue); /* requests of the old link are void; this also makes room for DISCONNECT and CONNECT */
       e.type = EV_DISCONNECT;
       post(&e);
-      ESP_LOGI(TAG, "disconnected (reason 0x%x)", event->disconnect.reason);
+      ESP_LOGI(TAG, "disconnected (reason 0x%x); host task stack: %u bytes never used", event->disconnect.reason,
+               (unsigned)uxTaskGetStackHighWaterMark(NULL));
       advertise(RECONNECT_WINDOW_MS);
       break;
     case BLE_GAP_EVENT_MTU:
@@ -304,7 +312,7 @@ esp_err_t ble_start(void) {
     return ESP_FAIL;
   }
   ble_store_config_init();
-  if (xTaskCreate(xfer_task, "xfer", 4096, NULL, 5, NULL) != pdPASS) return ESP_ERR_NO_MEM;
+  if (xTaskCreate(xfer_task, "xfer", XFER_STACK, NULL, 5, NULL) != pdPASS) return ESP_ERR_NO_MEM;
   nimble_port_freertos_init(host_task);
   return ESP_OK;
 }

@@ -96,6 +96,8 @@ async def connect_bleak(address: str | None, pair: bool, timeout: float = 10.0) 
     except BleakError:
         await client.pair()
     t.mtu = client.mtu_size
-    await client.start_notify(CTRL_UUID, t._on_ctrl)
-    await client.start_notify(DATA_UUID, t._on_data)
+    # StartNotify (one ordered D-Bus stream) rather than AcquireNotify (one socket per characteristic, so CTRL can
+    # overtake DATA); bleak >= 3.0.2 defaults to it, 2.1-3.0.1 did not.
+    await client.start_notify(CTRL_UUID, t._on_ctrl, bluez={"use_start_notify": True})
+    await client.start_notify(DATA_UUID, t._on_data, bluez={"use_start_notify": True})
     return t

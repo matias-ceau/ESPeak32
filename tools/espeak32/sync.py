@@ -20,6 +20,7 @@ from .container import FormatError, parse
 from .device_model import DeviceModel
 
 CTRL_TIMEOUT_S = 5.0
+DONE_GRACE_S = 0.2  # BlueZ may deliver TRANSFER_DONE ahead of the last chunks (one socket per characteristic)
 MAX_RESUMES_PER_FETCH = 8
 
 
@@ -47,6 +48,10 @@ class DeviceReadFailed(NoteSkipped):
     pass
 
 
+class KeepsLosingChunks(NoteSkipped):
+    pass
+
+
 class Transport(Protocol):
     mtu: int
 
@@ -61,12 +66,14 @@ class ModelTransport:
     """Transport over a DeviceModel with fault injection. The device runs synchronously on each write."""
 
     def __init__(self, dev: DeviceModel, mtu: int = 247, drop_after_chunks: int | None = None,
-                 drop_chunk: int | None = None, corrupt: Callable[[int], bool] | None = None,
-                 drop_on_op: int | None = None, drop_before: bool = True,
+                 drop_chunk: int | None = None, drop_seq: int | None = None, corrupt: Callable[[int], bool] | None = None,
+                 drop_on_op: int | None = None, drop_before: bool = True, done_early: bool = False,
                  on_write: Callable[[bytes], None] | None = None):
         self.dev, self.mtu = dev, mtu
         self.drop_after_chunks, self.drop_chunk, self.corrupt = drop_after_chunks, drop_chunk, corrupt
+        self.drop_seq = drop_seq  # lose the chunk with this seq on every GET
         self.drop_on_op, self.drop_before, self.on_write = drop_on_op, drop_before, on_write
+        self.done_early = done_early  # deliver TRANSFER_DONE ahead of the transfer's last DATA chunk
         self.writes: list[bytes] = []
         self.data_seen = 0  # DATA chunks the device produced on this connection
         self.data_delivered = 0
@@ -91,12 +98,16 @@ class ModelTransport:
                 if self.drop_after_chunks is not None and idx >= self.drop_after_chunks:
                     self._drop()
                     break
-                if idx == self.drop_chunk:
-                    continue
                 seq, payload = ble.unpack_data_chunk(msg)
+                if idx == self.drop_chunk or seq == self.drop_seq:
+                    continue
                 if self.corrupt is not None and payload and self.corrupt(seq):
                     msg = msg[:2] + bytes([payload[0] ^ 0x01]) + payload[1:]
                 self.data_delivered += 1
+            if (self.done_early and ch == "ctrl" and msg[0] == ble.EV_TRANSFER_DONE and self._events
+                    and self._events[-1][0] == "data"):
+                self._events.insert(len(self._events) - 1, (ch, msg))
+                continue
             self._events.append((ch, msg))
         self.dev.outputs.clear()
 
@@ -246,7 +257,8 @@ class SyncClient:
                 return data
             resumes += 1
             if resumes > MAX_RESUMES_PER_FETCH:
-                raise SyncError(f"note {entry.file_id}: transfer keeps losing chunks")
+                await self._abort()
+                raise KeepsLosingChunks()
             await self._abort()
 
     async def _receive(self, part: Path, offset: int, size: int) -> ble.CtrlMessage | None:
@@ -254,11 +266,12 @@ class SyncClient:
         expected_seq, consumed, received = 0, 0, offset
         half = self.window // 2
         link_ok = True  # after a failed CREDIT write, keep the chunks already queued; next_event raises LinkLost
+        done: ble.TransferDone | None = None  # arrived before the last chunks
         with open(part, "ab") as f:
             try:
                 while True:
                     try:
-                        ch, msg = await self.t.next_event(self.stall_s)
+                        ch, msg = await self.t.next_event(DONE_GRACE_S if done else self.stall_s)
                     except TimeoutError:
                         return None
                     if ch == "ctrl":
@@ -266,13 +279,17 @@ class SyncClient:
                         if isinstance(m, ble.TransferFailed):
                             raise DeviceReadFailed()
                         if isinstance(m, ble.TransferDone):
-                            return m if received == size else None
+                            if received == size:
+                                return m
+                            done = m
                         continue
                     seq, payload = ble.unpack_data_chunk(msg)
                     if seq != expected_seq:
                         return None
                     f.write(payload)
                     received += len(payload)
+                    if done is not None and received == size:
+                        return done
                     expected_seq = (expected_seq + 1) & 0xFFFF
                     consumed += 1
                     if consumed >= half and link_ok:
@@ -327,6 +344,8 @@ async def _fetch_verified(client: SyncClient, e: ble.ListEntry, part: Path) -> b
         except DeviceReadFailed:
             if retried:
                 return "read failure on device"
+        except KeepsLosingChunks:
+            return "transfer keeps losing chunks"
         retried = True
 
 

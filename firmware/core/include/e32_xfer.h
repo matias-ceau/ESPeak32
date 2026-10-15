@@ -9,6 +9,7 @@
 #define E32_XFER_INFO_BYTES 26
 #define E32_XFER_MIN_MTU 64
 #define E32_XFER_MAX_PAYLOAD 507
+#define E32_XFER_MAX_LIST 256
 
 enum { E32_XFER_OK = 0, E32_XFER_ENOENT = -1, E32_XFER_EBUSY = -2, E32_XFER_EIO = -3 };
 enum { E32_XFER_CTRL = 0, E32_XFER_DATA = 1 };
@@ -40,6 +41,9 @@ typedef struct {
   uint32_t file_id, size, offset, crc;
   uint16_t seq, credits;
   uint8_t chunk[E32_XFER_MAX_PAYLOAD + 2];
+  /* id buffers live here, not on small task stacks; e32_xfer_info may run on another task, so it has its own */
+  uint32_t list_ids[E32_XFER_MAX_LIST];
+  uint32_t info_ids[E32_XFER_MAX_LIST];
 } e32_xfer_t;
 
 void e32_xfer_init(e32_xfer_t *x, const e32_xfer_io_t *io, const e32_xfer_config_t *cfg);

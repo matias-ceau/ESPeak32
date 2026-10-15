@@ -10,7 +10,7 @@ dependencies = ["pyserial>=3.5"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
-ble = ["bleak>=1.0"]
+ble = ["bleak>=2.1"]
 
 [project.scripts]
 espeak32 = "espeak32.cli:main"

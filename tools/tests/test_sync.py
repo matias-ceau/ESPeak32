@@ -228,3 +228,20 @@ def test_client_info_and_list():
     info, entries = asyncio.run(go())
     assert info.file_count == 2
     assert [e.file_id for e in entries] == [1, 2]
+
+
+def test_note_that_keeps_losing_chunks_is_skipped_not_fatal(tmp_path):
+    dev = device()
+    rep = run(dev, tmp_path, connect=connector(dev, drop_seq=5))  # every GET loses its 6th chunk
+    assert rep.skipped == [(1, "transfer keeps losing chunks")]
+    assert rep.fetched == [2] and 1 in dev.notes
+
+
+def test_done_overtaking_the_last_chunk_is_tolerated(tmp_path):
+    # BlueZ AcquireNotify uses one socket per characteristic, so CTRL may overtake DATA.
+    dev = device()
+    connect = connector(dev, done_early=True)
+    rep = run(dev, tmp_path, connect=connect)
+    assert rep.fetched == [1, 2] and (tmp_path / key_name(1, TONE)).read_bytes() == TONE
+    gets = [w for w in connect.made[0].writes if w[0] == ble.OP_GET]
+    assert len(gets) == 2  # one per note: no resume was needed

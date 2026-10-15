@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
-import { expect, test } from "vitest";
-import { Db, type NoteRecord } from "../src/store/db";
+import { describe, expect, test } from "vitest";
+import { Db, requestPersistence, type NoteRecord } from "../src/store/db";
 import { noteKey } from "../src/ble/syncClient";
 
 let n = 0;
@@ -41,4 +41,15 @@ test("clock and settings", async () => {
 
 test("note key includes boot and start", () => {
   expect(noteKey({ type: "list", index: 0, total: 1, fileId: 7, size: 1, codec: 1, bootId: 3, startUs: 42n })).toBe("7:3:42");
+});
+
+describe("requestPersistence", () => {
+  const storage = (persisted: boolean, grant: boolean) => ({
+    persisted: async () => persisted,
+    persist: async () => grant,
+  }) as unknown as StorageManager;
+  test("already persisted", async () => expect(await requestPersistence(storage(true, false))).toBe("persisted"));
+  test("granted", async () => expect(await requestPersistence(storage(false, true))).toBe("persisted"));
+  test("refused", async () => expect(await requestPersistence(storage(false, false))).toBe("best-effort"));
+  test("no Storage API", async () => expect(await requestPersistence(undefined)).toBe("unsupported"));
 });
