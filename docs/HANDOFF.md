@@ -49,7 +49,7 @@ Later decisions are in `docs/DECISIONS.md`.
 
 ## Deferred minors (from the final review)
 Stuck-high mic data line not flagged as silent; `ls`/`rmall` capped at 128 notes; failed mount silently formats the
-partition; `joltwallet/littlefs` version unpinned (CI resolved 1.22.3); a failed TRANSFER_DONE decodes ambiguously in
+partition; a failed TRANSFER_DONE decodes ambiguously in
 `ble.py`; USB-CDC console falls into the UART branch in `console.c`.
 
 ## Not done on purpose (spec items for later)

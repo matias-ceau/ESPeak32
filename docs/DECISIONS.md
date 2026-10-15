@@ -18,3 +18,12 @@ Routine decisions taken without asking, newest last. Each entry: date, decision,
 
 The user's account is not in the `docker` group, and changing system groups is not routine. ESP-IDF v5.4.4 is installed
 under `~/esp/esp-idf-v5.4.4` (`install.sh esp32s3`); CI keeps using the `espressif/idf:v5.4.4` container.
+
+Local build on this machine (the shell's `python3` is a uv virtualenv, which `install.sh` refuses, and IDF 5.4 is not
+validated on Python 3.14): IDF's Python env uses uv's CPython 3.12 through a shim directory:
+`env -u VIRTUAL_ENV PATH=$HOME/esp/py312-shim:/usr/bin:/bin bash -c '. ~/esp/esp-idf-v5.4.4/export.sh && cd firmware && idf.py build'`.
+First local build (2026-10-15): clean, 0 warnings, app 0x502c0 bytes (79 % of the 1.5 MB app partition free).
+
+## 2026-10-15 — `joltwallet/littlefs` pinned to `~1.22.3`
+
+The version CI and the local build both resolved. Closes a deferred minor; `~` allows patch releases only.
