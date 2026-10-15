@@ -27,3 +27,22 @@ First local build (2026-10-15): clean, 0 warnings, app 0x502c0 bytes (79 % of th
 ## 2026-10-15 — `joltwallet/littlefs` pinned to `~1.22.3`
 
 The version CI and the local build both resolved. Closes a deferred minor; `~` allows patch releases only.
+
+## 2026-10-15 — M2 design choices (spec `docs/superpowers/specs/2026-10-15-m2-ble-sync-design.md`)
+
+The user asked for brainstorm → spec → plan → execution while away, deciding routine points alone. Self-approved:
+- **Transfer logic in portable C** (`e32_xfer`) with a thin NimBLE layer, so it is host-tested; NimBLE code is only
+  build-checked until the board is available.
+- **Python device model is the reference**; it generates `protocol/vectors/sync.txt` session transcripts that the C
+  engine and the TypeScript mock device replay byte for byte (same pattern as the M0 vectors). Line format, not JSON,
+  so the C test needs no parser library.
+- **Protocol clarifications** (spec section 2), notably `[0x83][status]` = transfer failed, decoded as
+  `TransferFailed` (fixes the ambiguous decode deferred from M1), and `battery_pct = 255` = unknown.
+- **Button:** recording starts on press; a press held 1.5 s cancels that note and, on release, opens a 120 s
+  advertising window; 10 s clears bonds. Matches parent spec 4.1 without the pre-roll buffer.
+- **Advertising:** 60 s after a save and after every disconnect (so a dropped link can resume), 120 s on long press.
+- **Credit policy:** window 16, re-grant half the window each time half is consumed; configurable.
+- **PWA M2 scope:** sync screen plus play/save WAV as the on-phone acceptance check; no UI framework; TypeScript 5.9
+  (7.x is the new native compiler, too fresh).
+- **GitHub Pages deploy only by manual dispatch**: publishing is the user's call.
+- `bleak` is an optional extra (`tools[ble]`); tests never import it.
