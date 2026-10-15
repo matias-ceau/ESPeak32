@@ -4,7 +4,9 @@
 #include <sys/stat.h>
 
 #include "audio_capture.h"
+#include "ble_gatt.h"
 #include "driver/gpio.h"
+#include "e32_button.h"
 #include "e32_dsp.h"
 #include "e32_writer.h"
 #include "esp_log.h"
@@ -28,12 +30,28 @@
 #endif
 
 static const char *TAG = "rec";
+#define ADVERTISE_AFTER_NOTE_MS 60000
+#define ADVERTISE_LONG_PRESS_MS 120000
+
 static volatile bool s_recording;
+static volatile uint32_t s_active_id;
+static e32_button_t s_button;
 
 bool recorder_is_recording(void) { return s_recording; }
+uint32_t recorder_active_id(void) { return s_active_id; }
+static uint32_t now_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
 static bool button_down(void) { return gpio_get_level(CONFIG_ESPEAK32_PIN_BUTTON) == 0; }
 static void led(int on) { gpio_set_level(CONFIG_ESPEAK32_PIN_LED, on); }
+
+static void flash(int times) {
+  for (int i = 0; i < times; i++) {
+    led(1);
+    vTaskDelay(pdMS_TO_TICKS(80));
+    led(0);
+    vTaskDelay(pdMS_TO_TICKS(80));
+  }
+}
 
 static void blink_error(void) {
   for (int i = 0; i < 15; i++) {
@@ -68,9 +86,9 @@ static void record_one_note(void) {
 
   uint64_t total = 0;
   int16_t early_peak = 0;
-  bool silence_checked = false, released = false, failed = false;
-  int down_ticks = 0;
+  bool silence_checked = false, failed = false, cancelled = false;
   unsigned loops = 0;
+  s_active_id = id;
   s_recording = true;
   led(1);
   ESP_LOGI(TAG, "recording note id=%u", (unsigned)id);
@@ -116,24 +134,31 @@ static void record_one_note(void) {
         break;
       }
     }
-    if (button_down()) {
-      if (released && ++down_ticks >= 2) break;
-    } else {
-      released = true;
-      down_ticks = 0;
+    e32_btn_action_t a = e32_button_update(&s_button, button_down(), true, now_ms());
+    if (a == E32_BTN_STOP) break;
+    if (a == E32_BTN_CANCEL) { /* the press that started this note turned into a long press */
+      cancelled = true;
+      break;
     }
   }
 
   int rc = e32_writer_close(&writer);
   store_sink_close(handle);
   s_recording = false;
+  s_active_id = 0;
   led(0);
+  if (cancelled) {
+    store_delete(id);
+    ESP_LOGI(TAG, "long press: note id=%u discarded", (unsigned)id);
+    return;
+  }
   char path[48];
   struct stat st = {0};
   if (store_path(id, path, sizeof path)) stat(path, &st);
   ESP_LOGI(TAG, "saved note id=%u samples=%llu bytes=%u%s", (unsigned)id, (unsigned long long)total,
            (unsigned)st.st_size, rc ? " (finalize error)" : "");
   if (failed || rc) blink_error();
+  ble_advertise_for(ADVERTISE_AFTER_NOTE_MS);
 }
 
 void recorder_run(void) {
@@ -151,13 +176,25 @@ void recorder_run(void) {
   led(0);
 
   static int32_t drain[SLOTS_PER_READ];
+  e32_button_init(&s_button);
   while (true) {
-    int stable = 0;
-    while (stable < 3) { /* 30 ms debounce */
-      audio_capture_read(drain, SLOTS_PER_READ, 10); /* keep the DMA ring drained while idle */
-      stable = button_down() ? stable + 1 : 0;
+    audio_capture_read(drain, SLOTS_PER_READ, 10); /* keep the DMA ring drained while idle */
+    switch (e32_button_update(&s_button, button_down(), false, now_ms())) {
+      case E32_BTN_START:
+        record_one_note();
+        break;
+      case E32_BTN_ADVERTISE:
+        ESP_LOGI(TAG, "long press: advertising for %d s", ADVERTISE_LONG_PRESS_MS / 1000);
+        ble_advertise_for(ADVERTISE_LONG_PRESS_MS);
+        break;
+      case E32_BTN_CLEAR_BONDS:
+        ESP_LOGW(TAG, "very long press: clearing BLE bonds");
+        ble_clear_bonds();
+        flash(3);
+        break;
+      default:
+        break;
     }
-    record_one_note();
-    while (button_down()) vTaskDelay(pdMS_TO_TICKS(10));
+    led(ble_is_advertising() && (now_ms() / 500) % 2); /* slow blink while connectable */
   }
 }

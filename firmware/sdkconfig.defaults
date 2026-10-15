@@ -6,3 +6,13 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 # Console on the native USB port (S3 USB-Serial-JTAG). For a UART bridge board, use menuconfig:
 # Component config -> ESP System Settings -> Channel for console output, and raise the baud to 921600.
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# BLE sync (M2): NimBLE peripheral only, one bonded phone, keys persisted in NVS.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
+CONFIG_BT_NIMBLE_SM_SC=y

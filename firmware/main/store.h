@@ -20,4 +20,9 @@ size_t store_free_bytes(void);
 /* Ascending ids; returns the count. */
 size_t store_list(uint32_t *ids, size_t max);
 bool store_path(uint32_t id, char *out, size_t out_len);
+/* Closes the read cache first if it holds this note. */
 esp_err_t store_delete(uint32_t id);
+/* ESP_ERR_NOT_FOUND if the note does not exist. */
+esp_err_t store_size(uint32_t id, uint32_t *size);
+/* Reads exactly len bytes at off; keeps one cached FILE* between calls (the BLE transfer reads sequentially). */
+esp_err_t store_read(uint32_t id, uint32_t off, uint8_t *buf, size_t len);

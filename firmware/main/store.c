@@ -4,16 +4,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "esp_littlefs.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 
 #define BASE "/audio"
 static const char *TAG = "store";
 static uint32_t s_boot_id;
+static SemaphoreHandle_t s_read_lock; /* guards the read cache against a concurrent delete */
+static FILE *s_read_file;
+static uint32_t s_read_id;
 
 static int sink_append(void *ctx, const uint8_t *data, size_t len) {
   return fwrite(data, 1, len, (FILE *)ctx) == len ? 0 : 1;
@@ -39,6 +45,8 @@ static int sink_rewrite_header(void *ctx, const uint8_t header[E32_HEADER_BYTES]
 }
 
 esp_err_t store_init(void) {
+  s_read_lock = xSemaphoreCreateMutex();
+  if (!s_read_lock) return ESP_ERR_NO_MEM;
   esp_err_t err = nvs_flash_init();
   if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     ESP_ERROR_CHECK(nvs_flash_erase());
@@ -147,8 +155,40 @@ size_t store_list(uint32_t *ids, size_t max) {
   return n;
 }
 
+static void close_read_cache(void) {
+  if (s_read_file) fclose(s_read_file);
+  s_read_file = NULL;
+  s_read_id = 0;
+}
+
 esp_err_t store_delete(uint32_t id) {
   char path[48];
   if (!store_path(id, path, sizeof path)) return ESP_ERR_INVALID_ARG;
-  return remove(path) == 0 ? ESP_OK : ESP_ERR_NOT_FOUND;
+  xSemaphoreTake(s_read_lock, portMAX_DELAY);
+  if (s_read_id == id) close_read_cache();
+  esp_err_t err = remove(path) == 0 ? ESP_OK : ESP_ERR_NOT_FOUND;
+  xSemaphoreGive(s_read_lock);
+  return err;
+}
+
+esp_err_t store_size(uint32_t id, uint32_t *size) {
+  char path[48];
+  struct stat st;
+  if (!store_path(id, path, sizeof path) || stat(path, &st) != 0) return ESP_ERR_NOT_FOUND;
+  *size = (uint32_t)st.st_size;
+  return ESP_OK;
+}
+
+esp_err_t store_read(uint32_t id, uint32_t off, uint8_t *buf, size_t len) {
+  esp_err_t err = ESP_FAIL;
+  xSemaphoreTake(s_read_lock, portMAX_DELAY);
+  if (s_read_id != id) {
+    char path[48];
+    close_read_cache();
+    if (store_path(id, path, sizeof path) && (s_read_file = fopen(path, "rb")) != NULL) s_read_id = id;
+  }
+  if (s_read_file && fseek(s_read_file, (long)off, SEEK_SET) == 0 && fread(buf, 1, len, s_read_file) == len)
+    err = ESP_OK;
+  xSemaphoreGive(s_read_lock);
+  return err;
 }
