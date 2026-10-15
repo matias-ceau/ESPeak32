@@ -109,6 +109,13 @@
     }
   },
   {
+    "name": "ctrl_TransferFailed",
+    "hex": "8306",
+    "decoded": {
+      "status": 6
+    }
+  },
+  {
     "name": "ctrl_ErrorAck",
     "hex": "8203",
     "decoded": {

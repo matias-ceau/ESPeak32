@@ -14,6 +14,7 @@ from espeak32.ble import (
     ProtocolError,
     SetTimeAck,
     TransferDone,
+    TransferFailed,
     decode_ctrl,
     pack_ctrl,
 )
@@ -51,6 +52,7 @@ def test_simple_requests_golden():
         AbortAck(),
         TransferDone(5, 0xCAFEBABE),
         ErrorAck(ble.OP_GET, ble.STATUS_NOT_FOUND),
+        TransferFailed(ble.STATUS_IO),
     ],
 )
 def test_ctrl_roundtrip_each_message(msg):
@@ -63,6 +65,15 @@ def test_no_files_list_golden():
 
 def test_transfer_done_has_op_0x83():
     assert pack_ctrl(TransferDone(1, 2))[0] == 0x83
+
+
+def test_transfer_failed_roundtrip():
+    assert pack_ctrl(TransferFailed(6)) == b"\x83\x06"
+    assert decode_ctrl(b"\x83\x06") == TransferFailed(6)
+
+
+def test_transfer_failed_not_error_ack():
+    assert not isinstance(decode_ctrl(b"\x83\x06"), ErrorAck)
 
 
 def test_error_status_decodes_to_error_ack():

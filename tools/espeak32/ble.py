@@ -77,12 +77,18 @@ class TransferDone:
 
 
 @dataclass(frozen=True)
+class TransferFailed:
+    status: int
+
+
+@dataclass(frozen=True)
 class ErrorAck:
     op: int
     status: int
 
 
-CtrlMessage = ListEntry | GetAck | DeleteAck | SetTimeAck | AbortAck | TransferDone | ErrorAck
+CtrlMessage = (ListEntry | GetAck | DeleteAck | SetTimeAck | AbortAck | TransferDone | TransferFailed
+               | ErrorAck)
 
 
 def pack_info(i: Info) -> bytes:
@@ -124,6 +130,10 @@ def req_abort() -> bytes:
 def pack_ctrl(msg: CtrlMessage) -> bytes:
     if isinstance(msg, ErrorAck):
         return bytes([msg.op | 0x80, msg.status])
+    if isinstance(msg, TransferFailed):
+        if msg.status == STATUS_OK:
+            raise ProtocolError("TransferFailed needs a non-zero status")
+        return bytes([EV_TRANSFER_DONE, msg.status])
     if isinstance(msg, ListEntry):
         if msg.total == 0:
             return bytes([0x80 | OP_LIST, 0]) + struct.pack("<HH", 0, 0)
@@ -154,7 +164,8 @@ def decode_ctrl(msg: bytes) -> CtrlMessage:
     if op not in (OP_LIST, OP_GET, OP_CREDIT, OP_DELETE, OP_SET_TIME, OP_ABORT):
         raise ProtocolError(f"unknown opcode {op}")
     if status != STATUS_OK:
-        return ErrorAck(op, status)
+        # 0x83 is the TRANSFER_DONE event (CREDIT has no response): a non-zero status means the transfer failed.
+        return TransferFailed(status) if op == OP_CREDIT else ErrorAck(op, status)
     if op == OP_LIST:
         if len(body) == 4:
             index, total = struct.unpack("<HH", body)
@@ -193,7 +204,7 @@ def generate_vectors() -> list[dict]:
     ctrl = [
         ListEntry(0, 2, 5, 1000, 1, 3, 77), ListEntry(0, 0, 0, 0, 0, 0, 0), GetAck(5, 1000),
         DeleteAck(5), SetTimeAck(123456789), AbortAck(), TransferDone(5, 0xCAFEBABE),
-        ErrorAck(OP_GET, STATUS_NOT_FOUND),
+        TransferFailed(STATUS_IO), ErrorAck(OP_GET, STATUS_NOT_FOUND),
     ]
     info_dict = dataclasses.asdict(info)
     info_dict["fw"] = list(info_dict["fw"])  # JSON has no tuples
