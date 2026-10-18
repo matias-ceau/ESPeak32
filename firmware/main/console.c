@@ -7,6 +7,9 @@
 #include "ble_gatt.h"
 #include "e32_crc32.h"
 #include "esp_console.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "mbedtls/base64.h"
 #include "recorder.h"
 #include "sdkconfig.h"
@@ -64,7 +67,11 @@ static int cmd_dump(int argc, char **argv) {
   fseek(f, 0, SEEK_END);
   long size = ftell(f);
   fseek(f, 0, SEEK_SET);
+  /* Logs from other tasks would land inside base64 lines: mute them for the dump, and yield regularly so the idle
+   * task (task watchdog) runs during long dumps. */
+  esp_log_level_set("*", ESP_LOG_NONE);
   printf("E32DUMP BEGIN %u %ld\n", (unsigned)id, size);
+  unsigned lines = 0;
   uint8_t raw[DUMP_CHUNK];
   unsigned char b64[4 * ((DUMP_CHUNK + 2) / 3) + 1];
   uint32_t crc = 0;
@@ -75,6 +82,7 @@ static int cmd_dump(int argc, char **argv) {
     b64[olen] = '\0';
     crc = e32_crc32_update(crc, raw, n);
     printf("E32DUMP D %s\n", b64);
+    if (++lines % 16 == 0) vTaskDelay(1);
   }
   int io_error = ferror(f);
   fclose(f);
@@ -82,6 +90,8 @@ static int cmd_dump(int argc, char **argv) {
     printf("E32DUMP ERR io\n");
   else
     printf("E32DUMP END %08x\n", (unsigned)crc);
+  fflush(stdout);
+  esp_log_level_set("*", CONFIG_LOG_DEFAULT_LEVEL);
   return 0;
 }
 

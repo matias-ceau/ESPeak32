@@ -74,3 +74,12 @@ The breadboard uses a latching toggle switch, which the push-button logic would 
 note cancelled at 1.5 s, bonds cleared at 10 s). The user chose a switch mode, now the default in
 `sdkconfig.defaults`: on = record, off = save, on for under 1.5 s = discard and advertise 120 s. Forgetting bonds
 moved to the `unpair` console command. Push-button mode stays in menuconfig. Host-tested in `test_button.c`.
+
+## 2026-10-18 — First hardware run (M1) and the dump watchdog fix
+
+- First power-up left the chip in download mode (`boot:0x0`) even across USB chip resets; a USB unplug/replug fixed
+  it. Flashing over JTAG (OpenOCD) then booted normally.
+- Recording works end to end. Voice at close range peaks at 26002 (-2 dBFS) with gain shift 2: keep the gain.
+- Bug found on hardware: `dump` of a long note starved the idle task on CPU 1; task-watchdog logs landed inside
+  base64 lines and the PC rejected the dump (correctly). Fix: the console mutes logs during `dump` and yields every
+  16 lines. Verified on the board: four notes (up to 765 KB) dumped intact at 47 KiB/s, no watchdog message.
