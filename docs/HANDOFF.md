@@ -10,7 +10,7 @@ want to be asked routine questions: decide, ledger the decision, keep going. **T
 is needed** (wiring, flashing, pressing the button, soldering). Android phone only. Enclosure: empty compact-cassette shell.
 Audio/text go to third-party models via OpenRouter; never put API keys in the repo.
 
-## State (2026-10-15)
+## State (2026-10-18)
 - M0 (contract) and M1 (mic works) are implemented: `.e32` file format, ADPCM/PCM16 reference codecs, BLE message codec,
   golden vectors, portable C core, ESP-IDF S3 recorder, serial `ls/dump/rm`, PC `espeak32 ls|dump|rm|decode`, CI,
   bring-up checklist.
@@ -27,18 +27,28 @@ Audio/text go to third-party models via OpenRouter; never put API keys in the re
   - C: `cmake -S firmware/core -B build/core && cmake --build build/core && ctest --test-dir build/core` (7 tests).
   - Firmware: see `docs/DECISIONS.md` for the IDF 5.4.4 command on this machine (Python 3.12 shim).
   - App: `cd app && npm ci && npm test && npm run build && PW_CHROMIUM=/usr/bin/chromium npx playwright test`.
-- The firmware has **never run on hardware**. Nothing about audio quality, gain, BLE pairing, throughput, dump speed or
-  power-cut behaviour is verified yet.
+- **2026-10-18, validated on hardware (ESP32-S3 DevKit + INMP441, toggle switch, on-board WS2812 LED):** recording,
+  LittleFS storage, USB `dump` (47 KiB/s), playback; BLE pairing (Just Works, bonded with the PC), PC sync of 4 notes
+  at 35.5 KiB/s byte-identical to the USB dumps, and resume after a link cut mid-transfer. Numbers in
+  `docs/measurements.md`. The PC side needed BlueZ 5.87 workarounds (no UUID discovery filter, a pairing agent in
+  `tools/espeak32/bluez_agent.py`, duplicate-notification filter); see `docs/DECISIONS.md`. The `adv [s]` console
+  command opens an advertising window over USB, so tests need no physical action.
+- The user does not want to flash or touch the board once it is wired: flash and test remotely (`idf.py -p
+  /dev/ttyACM0 flash`), ask only for unavoidable physical actions. Play audio through the Behringer UMC202HD.
 
 ## Next, in order
-1. With the user: `docs/bringup-m1.md` (wire, flash, record, dump, listen, power-cut check), then `docs/bringup-m2.md`
-   (pair, sync from PC and phone, resume after a drop, two-phase delete, long press, bond reset). Record numbers in
-   `docs/measurements.md`. Console is on the native USB port; opening it with pyserial may reset the chip (DTR/RTS).
-2. Fix whatever the hardware shows (gain, silent-mic detection, dropouts, MTU timing, mbuf pool, window size),
-   test-first where possible.
-3. M3: transcription and summary through OpenRouter (`input_audio`), recordings UI, settings, offline queue. Spec
+1. **Port to the ESP32-C3 Super Mini** (the actual build). The user will wire it. This time with a **momentary push
+   button** (the `e32_button` push mode, `ESPEAK32_BUTTON_PUSH`), not the toggle switch. Check the C3 pins (I2S,
+   button, LED: the Super Mini has a plain blue LED on GPIO8, not an RGB one), add a C3 target/sdkconfig and a CI
+   build, then redo the M1/M2 bring-up on it.
+2. **App local to the phone**, not served from the PC: the PWA was tested at `https://kirves.tail4ddf7b.ts.net:8443/`
+   (tailscale serve, temporary). Make it installable and fully offline on Android (service worker, manifest), hosted
+   once (GitHub Pages: `pages.yml`, needs Pages enabled) and then run from the home screen; or package it. Still to
+   test: the phone sync itself.
+3. Remaining M2 checks: two-phase delete (`espeak32 ble sync --delete`), bond reset (`unpair`).
+4. M3: transcription and summary through OpenRouter (`input_audio`), recordings UI, settings, offline queue. Spec
    section 8; needs a live API key from the user for the format/size-limit spike (spec risk 5).
-4. M4 cassette build: ask the user for the shell's internal dimensions and photos of their charger/buck modules first.
+5. M4 cassette build: ask the user for the shell's internal dimensions and photos of their charger/buck modules first.
 
 ## Rulings already made
 Later decisions are in `docs/DECISIONS.md`.
