@@ -14,6 +14,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
+#include "status_led.h"
 #include "store.h"
 
 #define SLOTS_PER_READ 320
@@ -42,23 +43,21 @@ uint32_t recorder_active_id(void) { return s_active_id; }
 static uint32_t now_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
 static bool button_down(void) { return gpio_get_level(CONFIG_ESPEAK32_PIN_BUTTON) == 0; }
-static void led(int on) { gpio_set_level(CONFIG_ESPEAK32_PIN_LED, on); }
-
 static void flash(int times) {
   for (int i = 0; i < times; i++) {
-    led(1);
+    status_led_set(LED_INFO);
     vTaskDelay(pdMS_TO_TICKS(80));
-    led(0);
+    status_led_set(LED_OFF);
     vTaskDelay(pdMS_TO_TICKS(80));
   }
 }
 
 static void blink_error(void) {
   for (int i = 0; i < 15; i++) {
-    led(i & 1);
+    status_led_set(i & 1 ? LED_ERROR : LED_OFF);
     vTaskDelay(pdMS_TO_TICKS(100));
   }
-  led(0);
+  status_led_set(LED_OFF);
 }
 
 static void record_one_note(void) {
@@ -90,7 +89,7 @@ static void record_one_note(void) {
   unsigned loops = 0;
   s_active_id = id;
   s_recording = true;
-  led(1);
+  status_led_set(LED_RECORD);
   ESP_LOGI(TAG, "recording note id=%u", (unsigned)id);
 
   while (true) {
@@ -146,7 +145,7 @@ static void record_one_note(void) {
   store_sink_close(handle);
   s_recording = false;
   s_active_id = 0;
-  led(0);
+  status_led_set(LED_OFF);
   if (cancelled) {
     store_delete(id);
     ESP_LOGI(TAG, "long press: note id=%u discarded", (unsigned)id);
@@ -168,12 +167,7 @@ void recorder_run(void) {
       .pull_up_en = GPIO_PULLUP_ENABLE,
   };
   gpio_config(&btn);
-  gpio_config_t out = {
-      .pin_bit_mask = 1ULL << CONFIG_ESPEAK32_PIN_LED,
-      .mode = GPIO_MODE_OUTPUT,
-  };
-  gpio_config(&out);
-  led(0);
+  status_led_init();
 
   static int32_t drain[SLOTS_PER_READ];
   e32_button_init(&s_button);
@@ -195,6 +189,6 @@ void recorder_run(void) {
       default:
         break;
     }
-    led(ble_is_advertising() && (now_ms() / 500) % 2); /* slow blink while connectable */
+    status_led_set(ble_is_advertising() && (now_ms() / 500) % 2 ? LED_ADVERTISE : LED_OFF); /* slow blink */
   }
 }

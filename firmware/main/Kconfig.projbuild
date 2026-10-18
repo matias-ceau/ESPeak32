@@ -16,9 +16,22 @@ menu "ESPeak32"
         int "Record button GPIO (active low, internal pull-up)"
         default 7
 
+    choice ESPEAK32_LED_TYPE
+        prompt "Status LED"
+        default ESPEAK32_LED_WS2812
+
+        config ESPEAK32_LED_WS2812
+            bool "On-board addressable RGB LED (WS2812)"
+        config ESPEAK32_LED_GPIO
+            bool "Plain LED on a GPIO (through a resistor)"
+    endchoice
+
     config ESPEAK32_PIN_LED
         int "Status LED GPIO"
+        default 48 if ESPEAK32_LED_WS2812
         default 8
+        help
+            ESP32-S3-DevKitC-1 v1.0 and most clones: RGB LED on GPIO48; DevKitC-1 v1.1: GPIO38.
 
     config ESPEAK32_MIC_GAIN_SHIFT
         int "Digital gain as a left shift (0..6)"

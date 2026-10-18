@@ -61,3 +61,9 @@ A fresh whole-branch review found no critical issue and seven important ones, al
 - A full event queue now fails the ATT write instead of dropping the request; the queue is reset on disconnect.
 Open question for the user: Just Works pairing is accepted in every advertising window (parent spec 4.6). Limiting new
 bonds to the 120 s long-press window would stop a nearby phone pairing during the 60 s after-note window.
+
+## 2026-10-18 — Status LED is the board's RGB LED by default
+
+The user wired no external LED. The DevKitC-style board has a WS2812 addressable LED (GPIO48; GPIO38 on DevKitC-1
+v1.1), driven through `espressif/led_strip ~3.1.0` (RMT). Colours: red recording, blue blink advertising, orange
+blink error, white flashes bonds cleared. A plain GPIO LED stays available in menuconfig.
