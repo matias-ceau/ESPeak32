@@ -1,6 +1,8 @@
 #include "status_led.h"
 
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "sdkconfig.h"
 
 static const char *TAG = "led";
@@ -27,7 +29,15 @@ void status_led_init(void) {
   if (led_strip_new_rmt_device(&strip, &rmt, &s_strip) != ESP_OK) {
     ESP_LOGE(TAG, "RGB LED on GPIO%d not available", CONFIG_ESPEAK32_PIN_LED);
     s_strip = NULL;
+    return;
   }
+  static const uint8_t TEST[][3] = {{40, 0, 0}, {0, 40, 0}, {0, 0, 40}};
+  for (int i = 0; i < 3; i++) {
+    led_strip_set_pixel(s_strip, 0, TEST[i][0], TEST[i][1], TEST[i][2]);
+    led_strip_refresh(s_strip);
+    vTaskDelay(pdMS_TO_TICKS(350));
+  }
+  ESP_LOGI(TAG, "RGB LED self-test done (GPIO%d)", CONFIG_ESPEAK32_PIN_LED);
   status_led_set(LED_OFF);
 }
 
@@ -44,6 +54,12 @@ void status_led_set(led_state_t s) {
 void status_led_init(void) {
   gpio_config_t out = {.pin_bit_mask = 1ULL << CONFIG_ESPEAK32_PIN_LED, .mode = GPIO_MODE_OUTPUT};
   gpio_config(&out);
+  for (int i = 0; i < 3; i++) {
+    gpio_set_level(CONFIG_ESPEAK32_PIN_LED, 1);
+    vTaskDelay(pdMS_TO_TICKS(150));
+    gpio_set_level(CONFIG_ESPEAK32_PIN_LED, 0);
+    vTaskDelay(pdMS_TO_TICKS(150));
+  }
   status_led_set(LED_OFF);
 }
 
