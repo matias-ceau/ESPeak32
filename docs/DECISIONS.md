@@ -83,3 +83,17 @@ moved to the `unpair` console command. Push-button mode stays in menuconfig. Hos
 - Bug found on hardware: `dump` of a long note starved the idle task on CPU 1; task-watchdog logs landed inside
   base64 lines and the PC rejected the dump (correctly). Fix: the console mutes logs during `dump` and yields every
   16 lines. Verified on the board: four notes (up to 765 KB) dumped intact at 47 KiB/s, no watchdog message.
+
+## 2026-10-18 — M2 on real hardware (PC side) and three BlueZ workarounds
+
+Bluetooth sync from the PC works: 4 notes (1.76 MB) at 35.5 KiB/s with MTU 247, byte-identical to the USB dumps, and a
+link cut mid-transfer resumes automatically. Found on the way, all on the PC side (BlueZ 5.87 / bleak 3.0.2):
+- **bluetoothd segfault** (use-after-free in `is_filter_match`, symbolized via debuginfod) when a UUID discovery
+  filter outlives its client. The CLI no longer passes a UUID filter to BlueZ; it filters advertisements itself.
+- **Pairing failed** ("Numeric comparison failed"): LE Secure Connections Just Works needs an agent to confirm and
+  bleak has none. `tools/espeak32/bluez_agent.py` registers one during connection, accepting only the target device.
+- **Duplicate notifications** after a reconnect within one process, and a stale disconnect callback while
+  connecting. The bleak transport drops back-to-back duplicate DATA seqs and identical CTRL answers with no request
+  in between, and ignores disconnects before the link is up.
+- Bluetooth errors now print a clear message (exit 4) instead of a traceback.
+- Firmware: `adv [seconds]` console command opens the advertising window over USB (no switch needed for tests).

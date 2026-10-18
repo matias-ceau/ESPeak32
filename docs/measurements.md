@@ -8,4 +8,4 @@
 
 | Date | Phone / PC | MTU | Window | Note bytes | Sync time (s) | KB/s | Resume after drop OK | Notes |
 |---|---|---|---|---|---|---|---|---|
-| | | | | | | | | |
+| 2026-10-18 | PC: Arch Linux, BlueZ 5.87, bleak 3.0.2 | 247 (device-initiated) | 16 | 1761752 (4 notes) | 48.5 | 35.5 (incl. connect + pairing) | yes: link cut mid-note via `bluetoothctl disconnect`, reconnected in 0.8 s, all notes byte-identical | Stack never used: host task 2544 B, xfer task 4112 B. |

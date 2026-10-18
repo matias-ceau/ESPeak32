@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from . import ble
-from .ble_transport import DeviceNotFound
+from .ble_transport import BluetoothError, DeviceNotFound
 from .codec import UnsupportedCodec
 from .container import FormatError
 from .decode import decode_e32
@@ -156,6 +156,10 @@ def _cmd_ble(args, open_port=None) -> int:
         return asyncio.run(args.ble_func(args))
     except DeviceNotFound as e:
         print(f"error: {e}", file=sys.stderr)
+        return 4
+    except BluetoothError as e:
+        print(f"error: Bluetooth on this computer: {e} (is it on? `rfkill unblock bluetooth`, "
+              f"`systemctl start bluetooth`, `bluetoothctl power on`)", file=sys.stderr)
         return 4
     except (SyncError, LinkLost, ble.ProtocolError) as e:
         print(f"error: {e}", file=sys.stderr)

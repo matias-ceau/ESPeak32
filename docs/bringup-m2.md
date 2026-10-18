@@ -32,5 +32,6 @@ them (anything under about 512 bytes means the stack must grow).
 | No pairing prompt, reads fail | Remove the old bond on the phone/PC, type `unpair` on the device console, pair again. |
 | Status "MTU below 64 bytes" | Note the phone model; the device needs MTU >= 64. Report it with the monitor log. |
 | Transfer stalls, many resumes | Lower the window (`espeak32 ble sync --window 8`); report the KB/s at each window. |
+| PC Bluetooth off (`No powered Bluetooth adapters`) | `rfkill unblock bluetooth`, `sudo systemctl start bluetooth`, `bluetoothctl power on`. |
 | `no ESPeak32 advertising nearby` | The window is 60 s after a save; flick the switch on-off quickly to open a 120 s window. |
 | Phone app says Web Bluetooth unavailable | Use Chrome (not Firefox/Samsung Internet) over HTTPS or `adb reverse` localhost. |

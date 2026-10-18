@@ -78,3 +78,70 @@ def test_cli_ble_scan(capsys):
 
 def test_bleak_not_imported():
     assert "bleak" not in sys.modules
+
+
+def test_cli_ble_bluetooth_error_is_a_message_not_a_traceback(capsys):
+    from espeak32.ble_transport import BluetoothError
+
+    async def off(address, pair):
+        raise BluetoothError("No powered Bluetooth adapters found")
+
+    assert main(["ble", "info"], connect_ble=off) == 4
+    err = capsys.readouterr().err
+    assert "Bluetooth" in err and "Traceback" not in err
+
+
+def test_agent_accepts_only_the_target_device():
+    from espeak32.bluez_agent import device_matches
+
+    assert device_matches("/org/bluez/hci0/dev_94_A9_90_31_29_CE", "94:a9:90:31:29:ce")
+    assert not device_matches("/org/bluez/hci0/dev_11_22_33_44_55_66", "94:A9:90:31:29:CE")
+    assert not device_matches("/org/bluez/hci0/dev_94_A9_90_31_29_CE/extra", "94:A9:90:31:29:CE")
+
+
+def test_disconnect_callback_before_connect_is_ignored():
+    # bleak can report a stale disconnect while a new connection is being set up
+    import asyncio
+
+    from espeak32.ble_transport import BleakTransport
+
+    async def go():
+        t = BleakTransport()
+        t._on_disconnect(None)  # stale event from an earlier link
+        t.mark_connected()
+        try:
+            await t.next_event(0.05)
+        except TimeoutError:
+            return "alive"
+        return "event"
+
+    assert asyncio.run(go()) == "alive"
+
+
+def test_duplicate_notifications_after_reconnect_are_dropped():
+    # After a reconnect within one process, BlueZ/bleak can deliver every notification twice.
+    import asyncio
+
+    from espeak32 import ble
+    from espeak32.ble_transport import BleakTransport
+
+    async def go():
+        t = BleakTransport()
+        t.mark_connected()
+        ack = ble.pack_ctrl(ble.SetTimeAck(5))
+        t._on_ctrl(None, bytearray(ack))
+        t._on_ctrl(None, bytearray(ack))  # duplicate: no request in between
+        for seq in (0, 0, 1, 1, 2):  # duplicated chunks
+            t._on_data(None, bytearray(ble.pack_data_chunk(seq, b"x")))
+        t._wrote()  # a new request: an identical answer is legitimate again
+        t._on_ctrl(None, bytearray(ack))
+        out = []
+        while True:
+            try:
+                out.append(await t.next_event(0.01))
+            except TimeoutError:
+                return out
+
+    out = asyncio.run(go())
+    assert [ch for ch, _ in out] == ["ctrl", "data", "data", "data", "ctrl"]
+    assert [ble.unpack_data_chunk(m)[0] for ch, m in out if ch == "data"] == [0, 1, 2]

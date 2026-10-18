@@ -112,6 +112,21 @@ static int cmd_rm(int argc, char **argv) {
   return 0;
 }
 
+static int cmd_adv(int argc, char **argv) {
+  unsigned long seconds = 120;
+  if (argc >= 2) {
+    char *end;
+    seconds = strtoul(argv[1], &end, 10);
+    if (*end != '\0' || seconds == 0 || seconds > 3600) {
+      printf("E32ADV ERR args\n");
+      return 0;
+    }
+  }
+  ble_advertise_for((uint32_t)seconds * 1000);
+  printf(ble_is_advertising() ? "E32ADV OK %lu\n" : "E32ADV ERR ble\n", seconds);
+  return 0;
+}
+
 static int cmd_unpair(int argc, char **argv) {
   (void)argc;
   (void)argv;
@@ -150,6 +165,7 @@ void console_start(void) {
       {.command = "dump", .help = "Dump a note: dump <id>", .func = &cmd_dump},
       {.command = "rm", .help = "Delete a note: rm <id>", .func = &cmd_rm},
       {.command = "rmall", .help = "Delete all notes", .func = &cmd_rmall},
+      {.command = "adv", .help = "Advertise over BLE for N seconds (default 120)", .func = &cmd_adv},
       {.command = "unpair", .help = "Forget every bonded phone or PC", .func = &cmd_unpair},
   };
   for (size_t i = 0; i < sizeof cmds / sizeof cmds[0]; i++) ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));
