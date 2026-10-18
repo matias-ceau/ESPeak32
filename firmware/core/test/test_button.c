@@ -23,12 +23,21 @@ static void hold(sim_t *s, bool raw, uint32_t ms) {
   }
 }
 
-static void sim_init(sim_t *s, uint32_t now) {
-  e32_button_init(&s->b);
+static void sim_start(sim_t *s, uint32_t now) {
   s->now = now;
   s->recording = false;
   s->n = 0;
   hold(s, false, 100);
+}
+
+static void sim_init(sim_t *s, uint32_t now) {
+  e32_button_init(&s->b);
+  sim_start(s, now);
+}
+
+static void sim_init_switch(sim_t *s, uint32_t now) {
+  e32_button_init_switch(&s->b);
+  sim_start(s, now);
 }
 
 #define EXPECT_ACTIONS(s, ...)                                         \
@@ -105,6 +114,62 @@ static void now_ms_wraparound(void) {
   EXPECT_ACTIONS(s, E32_BTN_START, E32_BTN_CANCEL);
 }
 
+/* ---- latching switch mode ---- */
+
+static void switch_on_records_off_saves(void) {
+  sim_t s;
+  sim_init_switch(&s, 0);
+  hold(&s, true, 3000);
+  hold(&s, false, 200);
+  EXPECT_ACTIONS(s, E32_BTN_START, E32_BTN_STOP);
+}
+
+static void switch_quick_flick_discards_and_advertises(void) {
+  sim_t s;
+  sim_init_switch(&s, 0);
+  hold(&s, true, 500);
+  hold(&s, false, 200);
+  EXPECT_ACTIONS(s, E32_BTN_START, E32_BTN_CANCEL, E32_BTN_ADVERTISE);
+  CHECK(!s.recording);
+}
+
+static void switch_left_on_never_cancels_or_clears_bonds(void) {
+  sim_t s;
+  sim_init_switch(&s, 0);
+  hold(&s, true, 15000);
+  EXPECT_ACTIONS(s, E32_BTN_START);
+  CHECK(s.recording);
+}
+
+static void switch_off_after_firmware_stopped_does_nothing(void) {
+  sim_t s;
+  sim_init_switch(&s, 0);
+  hold(&s, true, 3000);
+  s.recording = false; /* max length or storage full ended the note while the lever is still on */
+  hold(&s, false, 200);
+  EXPECT_ACTIONS(s, E32_BTN_START);
+}
+
+static void switch_bounce_is_ignored(void) {
+  sim_t s;
+  sim_init_switch(&s, 0);
+  hold(&s, true, 10);
+  hold(&s, false, 10);
+  hold(&s, true, 10);
+  hold(&s, false, 500);
+  CHECK_EQ_U64(s.n, 0);
+}
+
+static void switch_on_at_boot_records(void) {
+  sim_t s;
+  e32_button_init_switch(&s.b);
+  s.now = 0;
+  s.recording = false;
+  s.n = 0;
+  hold(&s, true, 200);
+  EXPECT_ACTIONS(s, E32_BTN_START);
+}
+
 int main(void) {
   short_press_starts_and_keeps_recording();
   second_press_stops();
@@ -113,5 +178,11 @@ int main(void) {
   bounce_is_ignored();
   release_of_stop_press_does_nothing();
   now_ms_wraparound();
+  switch_on_records_off_saves();
+  switch_quick_flick_discards_and_advertises();
+  switch_left_on_never_cancels_or_clears_bonds();
+  switch_off_after_firmware_stopped_does_nothing();
+  switch_bounce_is_ignored();
+  switch_on_at_boot_records();
   return 0;
 }

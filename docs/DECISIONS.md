@@ -67,3 +67,10 @@ bonds to the 120 s long-press window would stop a nearby phone pairing during th
 The user wired no external LED. The DevKitC-style board has a WS2812 addressable LED (GPIO48; GPIO38 on DevKitC-1
 v1.1), driven through `espressif/led_strip ~3.1.0` (RMT). Colours: red recording, blue blink advertising, orange
 blink error, white flashes bonds cleared. A plain GPIO LED stays available in menuconfig.
+
+## 2026-10-18 — Latching toggle switch support (user's choice)
+
+The breadboard uses a latching toggle switch, which the push-button logic would misread (a press that never ends:
+note cancelled at 1.5 s, bonds cleared at 10 s). The user chose a switch mode, now the default in
+`sdkconfig.defaults`: on = record, off = save, on for under 1.5 s = discard and advertise 120 s. Forgetting bonds
+moved to the `unpair` console command. Push-button mode stays in menuconfig. Host-tested in `test_button.c`.

@@ -135,7 +135,7 @@ static void record_one_note(void) {
     }
     e32_btn_action_t a = e32_button_update(&s_button, button_down(), true, now_ms());
     if (a == E32_BTN_STOP) break;
-    if (a == E32_BTN_CANCEL) { /* the press that started this note turned into a long press */
+    if (a == E32_BTN_CANCEL) { /* long press, or a quick switch flick: discard this note, then advertise */
       cancelled = true;
       break;
     }
@@ -170,7 +170,11 @@ void recorder_run(void) {
   status_led_init();
 
   static int32_t drain[SLOTS_PER_READ];
+#ifdef CONFIG_ESPEAK32_BUTTON_SWITCH
+  e32_button_init_switch(&s_button);
+#else
   e32_button_init(&s_button);
+#endif
   while (true) {
     audio_capture_read(drain, SLOTS_PER_READ, 10); /* keep the DMA ring drained while idle */
     switch (e32_button_update(&s_button, button_down(), false, now_ms())) {

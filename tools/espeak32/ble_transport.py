@@ -79,7 +79,7 @@ async def connect_bleak(address: str | None, pair: bool, timeout: float = 10.0) 
         target = await BleakScanner.find_device_by_filter(
             lambda d, adv: SERVICE_UUID in (u.lower() for u in adv.service_uuids), timeout=timeout)
         if target is None:
-            raise DeviceNotFound("no ESPeak32 advertising nearby (press the button for 1.5 s to advertise)")
+            raise DeviceNotFound("no ESPeak32 advertising nearby (flick the switch on-off, or hold the button 1.5 s, to advertise)")
     else:
         target = address
     t = BleakTransport()

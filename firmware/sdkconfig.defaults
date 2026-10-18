@@ -19,3 +19,5 @@ CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
 CONFIG_BT_NIMBLE_SM_SC=y
 # INFO reads run on the host task and walk the LittleFS directory.
 CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=6144
+# The v0 breadboard uses a latching toggle switch on GPIO7 (menuconfig -> ESPeak32 -> Record control).
+CONFIG_ESPEAK32_BUTTON_SWITCH=y

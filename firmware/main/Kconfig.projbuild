@@ -13,8 +13,22 @@ menu "ESPeak32"
         default 6
 
     config ESPEAK32_PIN_BUTTON
-        int "Record button GPIO (active low, internal pull-up)"
+        int "Record button or switch GPIO (active low, internal pull-up)"
         default 7
+
+    choice ESPEAK32_BUTTON_MODE
+        prompt "Record control"
+        default ESPEAK32_BUTTON_PUSH
+        help
+            Push button: press = record/stop, hold 1.5 s = advertise, hold 10 s = forget pairings.
+            Latching switch: on = record, off = save; on for under 1.5 s = advertise. `unpair` on the console
+            forgets pairings.
+
+        config ESPEAK32_BUTTON_PUSH
+            bool "Momentary push button"
+        config ESPEAK32_BUTTON_SWITCH
+            bool "Latching toggle switch"
+    endchoice
 
     choice ESPEAK32_LED_TYPE
         prompt "Status LED"

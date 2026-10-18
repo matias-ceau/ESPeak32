@@ -20,14 +20,23 @@ Avoid strapping pins (0, 3, 45, 46), USB pins (19, 20) and the flash/PSRAM pins.
 different free pins; set them through menuconfig. The firmware expects the partition table in `firmware/partitions.csv`
 (8 MB flash).
 
-## Button and LED behaviour (firmware 0.2.0)
+## Record control and LED behaviour (firmware 0.2.0)
 
-| Action | Effect |
+The v0 breadboard uses a **latching toggle switch** between GPIO7 and GND (the default, `Record control` in
+menuconfig). A momentary push button works too: select it in menuconfig.
+
+| Toggle switch (default) | Effect |
 |---|---|
-| Short press while idle | Start recording (LED on). Recording starts at the press, so the first word is kept. |
-| Press while recording | Stop and save; the device then advertises for 60 s so the phone can sync. |
+| Switch on | Start recording (LED red). If the switch is already on at power-up, recording starts at boot. |
+| Switch off | Stop and save; the device then advertises for 60 s so the phone can sync. |
+| Quick flick on-off (under 1.5 s) | That bit is discarded and the device advertises for 120 s (sync on demand). |
+| `unpair` on the serial console | Forget every bonded phone/PC. |
+
+| Push button (menuconfig) | Effect |
+|---|---|
+| Short press while idle / press while recording | Start / stop and save (then advertise 60 s). |
 | Hold 1.5 s while idle | The note just started is discarded; on release the device advertises for 120 s. |
-| Hold 10 s | Clears all BLE bonds (three quick LED flashes). Use it when the phone was "forgotten". |
+| Hold 10 s | Clears all BLE bonds (three white flashes). |
 
 LED (RGB): red = recording; blue slow blink (1 Hz) = advertising, connectable; orange fast blink for 3 s = error
 (storage full, write failure); three white flashes = bonds cleared. A plain LED shows the same patterns without colour. After a disconnect the device advertises for another 60 s so an interrupted sync can resume.

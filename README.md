@@ -43,7 +43,7 @@ espeak32 ble sync --out notes/ --wav             # resumable; keeps the notes on
 espeak32 ble sync --out notes/ --delete          # deletes each note only after it is stored and verified
 ```
 
-The device is connectable for 60 s after a note is saved, or for 120 s after a 1.5 s press. Exit codes: 0 ok,
+The device is connectable for 60 s after a note is saved, or for 120 s after a quick on-off flick of the switch (1.5 s hold with a push button). Exit codes: 0 ok,
 3 protocol or transfer error, 4 no device found.
 
 ## Phone app (M2)

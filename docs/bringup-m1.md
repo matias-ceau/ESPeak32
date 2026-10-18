@@ -7,7 +7,7 @@ Goal: an intelligible voice note on your PC, produced end to end.
    The console is on the S3's native USB port (USB-Serial-JTAG). If your board only exposes a USB-UART bridge, switch
    the console channel in `idf.py menuconfig` and raise the baud to 921600.
 3. **Boot log** should show `mounted /audio, boot_id=N` (N increments on every boot).
-4. **Record**: press the button, speak for about 10 s at 20 cm, press again. The log shows `saved note id=1 ...`.
+4. **Record**: switch on (LED red), speak for about 10 s at 20 cm, switch off. The log shows `saved note id=1 ...`.
 5. **List**: `espeak32 ls --port <port>` shows id 1 and its size.
 6. **Dump + decode**: `espeak32 dump --port <port> --id 1 -o note.e32 --decode note.wav`, then listen to `note.wav`.
 7. **Measure** and fill in `docs/measurements.md`: RMS in silence, peak while speaking, and whether the level is right

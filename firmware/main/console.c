@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ble_gatt.h"
 #include "e32_crc32.h"
 #include "esp_console.h"
 #include "mbedtls/base64.h"
@@ -101,6 +102,14 @@ static int cmd_rm(int argc, char **argv) {
   return 0;
 }
 
+static int cmd_unpair(int argc, char **argv) {
+  (void)argc;
+  (void)argv;
+  ble_clear_bonds();
+  printf("E32UNPAIR OK\n");
+  return 0;
+}
+
 static int cmd_rmall(int argc, char **argv) {
   (void)argc;
   (void)argv;
@@ -131,6 +140,7 @@ void console_start(void) {
       {.command = "dump", .help = "Dump a note: dump <id>", .func = &cmd_dump},
       {.command = "rm", .help = "Delete a note: rm <id>", .func = &cmd_rm},
       {.command = "rmall", .help = "Delete all notes", .func = &cmd_rmall},
+      {.command = "unpair", .help = "Forget every bonded phone or PC", .func = &cmd_unpair},
   };
   for (size_t i = 0; i < sizeof cmds / sizeof cmds[0]; i++) ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));
   ESP_ERROR_CHECK(esp_console_start_repl(repl));

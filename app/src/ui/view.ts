@@ -40,7 +40,7 @@ function wavUrl(n: NoteRecord): string {
 }
 
 export async function mountView(root: HTMLElement, deps: ViewDeps): Promise<void> {
-  const status = el("p", { id: "status", textContent: "Press the device button for 1.5 s, then tap Connect & sync." });
+  const status = el("p", { id: "status", textContent: "Flick the device switch on-off (or hold its button 1.5 s), then tap Connect & sync." });
   const progress = el("progress", { id: "progress", max: 1, value: 0 });
   const del = el("input", { id: "delete-after-sync", type: "checkbox",
     checked: await deps.db.getSetting("deleteAfterSync", true) });
