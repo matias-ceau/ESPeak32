@@ -43,8 +43,9 @@ Audio/text go to third-party models via OpenRouter; never put API keys in the re
    build, then redo the M1/M2 bring-up on it.
 2. **App local to the phone**, not served from the PC: the PWA was tested at `https://kirves.tail4ddf7b.ts.net:8443/`
    (tailscale serve, temporary). Make it installable and fully offline on Android (service worker, manifest), hosted
-   once (GitHub Pages: `pages.yml`, needs Pages enabled) and then run from the home screen; or package it. Still to
-   test: the phone sync itself.
+   once (GitHub Pages: `pages.yml`, needs Pages enabled) and then run from the home screen; or package it. **Phone sync
+   works** (user, before 2026-11-12: app installed on the phone, notes synced and stored there); phone model, MTU and
+   KB/s were not recorded.
 3. Remaining M2 checks: two-phase delete (`espeak32 ble sync --delete`), bond reset (`unpair`).
 4. M3: transcription and summary through OpenRouter (`input_audio`), recordings UI, settings, offline queue. Spec
    section 8; needs a live API key from the user for the format/size-limit spike (spec risk 5).

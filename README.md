@@ -3,8 +3,9 @@
 A DIY, cassette-shell-sized AI voice-note recorder built from cheap parts (ESP32 + INMP441 mic), with an
 Android companion app that syncs recordings over BLE and transcribes/summarises them through OpenRouter.
 
-Status: M0 (contract) and M1 (mic works) implemented; M2 (BLE sync: firmware, PC CLI, phone app) implemented and
-tested without hardware. Nothing has run on the board yet. See `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+Status: M0 (contract), M1 (mic works) and M2 (BLE sync: firmware, PC CLI, phone app) work on the ESP32-S3 breadboard:
+notes record, sync to a PC and to the phone app over BLE, and play back. Next: the ESP32-C3 Super Mini build and M3
+(transcription through OpenRouter). See `docs/HANDOFF.md`, `docs/superpowers/specs/` and `docs/superpowers/plans/`.
 
 ## Layout
 
