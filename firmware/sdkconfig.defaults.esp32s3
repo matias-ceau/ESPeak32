@@ -1,0 +1,6 @@
+# ESP32-S3 DevKitC-style board, 8 MB flash: the v0 breadboard (hardware/wiring-v0-s3.md).
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+# The v0 breadboard uses a latching toggle switch on GPIO7 (menuconfig -> ESPeak32 -> Record control).
+CONFIG_ESPEAK32_BUTTON_SWITCH=y
+# Status LED: the board's WS2812 on GPIO48 (the Kconfig default).

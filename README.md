@@ -3,8 +3,9 @@
 A DIY, cassette-shell-sized AI voice-note recorder built from cheap parts (ESP32 + INMP441 mic), with an
 Android companion app that syncs recordings over BLE and transcribes/summarises them through OpenRouter.
 
-Status: M0 (contract) and M1 (mic works) implemented; M2 (BLE sync: firmware, PC CLI, phone app) implemented and
-tested without hardware. Nothing has run on the board yet. See `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+Status: M0 (contract), M1 (mic works) and M2 (BLE sync: firmware, PC CLI, phone app) work on the ESP32-S3 breadboard:
+notes record, sync to a PC and to the phone app over BLE, and play back. Next: the ESP32-C3 Super Mini build and M3
+(transcription through OpenRouter). See `docs/HANDOFF.md`, `docs/superpowers/specs/` and `docs/superpowers/plans/`.
 
 ## Layout
 
@@ -28,8 +29,12 @@ Do not dictate identifiable patient information.
 python3 -m venv .venv && .venv/bin/pip install -e 'tools[dev]'
 .venv/bin/pytest tools/tests -q                        # Python reference + vectors
 cmake -S firmware/core -B build/core && cmake --build build/core && ctest --test-dir build/core
-cd firmware && idf.py set-target esp32s3 && idf.py build    # needs ESP-IDF 5.4
+cd firmware && idf.py set-target esp32s3 && idf.py build    # S3 breadboard; needs ESP-IDF 5.4
+cd firmware && idf.py set-target esp32c3 && idf.py build    # C3 Super Mini (hardware/wiring-c3-supermini.md)
 ```
+
+`set-target` starts a fresh `sdkconfig` from `sdkconfig.defaults` plus `sdkconfig.defaults.<target>`. To keep both
+builds side by side: `idf.py -B build-c3 -D SDKCONFIG=build-c3/sdkconfig set-target esp32c3 build`.
 
 Record, dump and decode a note: see `docs/bringup-m1.md`.
 

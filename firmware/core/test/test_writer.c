@@ -19,7 +19,7 @@ static int16_t *load_pcm(size_t *n) {
 static e32_sink_t sink_for(mem_sink_t *m) {
   memset(m, 0, sizeof *m);
   m->limit = sizeof m->buf;
-  e32_sink_t s = {mem_append, mem_rewrite, m};
+  e32_sink_t s = {mem_append, m};
   return s;
 }
 
@@ -57,6 +57,11 @@ static void empty_note(void) {
   free(want);
 }
 
+static uint32_t get32(const uint8_t *p) {
+  return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+/* The header is written once (version 2, unfinalized fields); the end record carries the count and CRC. */
 static void one_sample_note(void) {
   static mem_sink_t m;
   e32_writer_t w;
@@ -64,10 +69,16 @@ static void one_sample_note(void) {
   CHECK(e32_writer_open(&w, E32_CODEC_ADPCM, 16000, 1, 2, START_US, sink_for(&m)) == 0);
   CHECK(e32_writer_push(&w, &s, 1) == 0);
   CHECK(e32_writer_close(&w) == 0);
-  CHECK_EQ_U64(m.len, 32 + 258);
+  CHECK_EQ_U64(m.len, 32 + 258 + E32_END_BYTES);
   e32_header_t h;
   CHECK(e32_header_unpack(m.buf, &h) == 0);
-  CHECK_EQ_U64(h.sample_count, 1);
+  CHECK_EQ_U64(h.version, 2);
+  CHECK_EQ_U64(h.sample_count, E32_UNFINALIZED);
+  CHECK_EQ_U64(h.payload_crc32, 0);
+  const uint8_t *end = m.buf + m.len - E32_END_BYTES;
+  CHECK(end[0] == 0xFF && end[1] == 0xFF && memcmp(end + 2, "E32E", 4) == 0);
+  CHECK_EQ_U64(get32(end + 6), 1);
+  CHECK_EQ_U64(get32(end + 10), e32_crc32_update(0, m.buf + 32, 258));
 }
 
 static void rejects_opus(void) {
@@ -76,7 +87,9 @@ static void rejects_opus(void) {
   CHECK(e32_writer_open(&w, E32_CODEC_OPUS, 16000, 1, 2, START_US, sink_for(&m)) == -1);
 }
 
-static void sink_full_midway_still_finalizes(void) {
+/* A failed append may leave a partial frame on a real filesystem, so the writer adds no end record after it: the note
+ * stays unfinalized and decodes up to its last complete frame. */
+static void sink_full_midway_stays_unfinalized(void) {
   size_t n;
   int16_t *pcm = load_pcm(&n);
   static mem_sink_t m;
@@ -91,14 +104,24 @@ static void sink_full_midway_still_finalizes(void) {
   }
   CHECK(failed);
   CHECK(e32_writer_close(&w) == -2);
-  CHECK(m.rewrites == 1);
+  CHECK_EQ_U64(m.len, 32 + 7 * 258); /* seven whole frames, nothing after them */
   e32_header_t h;
   CHECK(e32_header_unpack(m.buf, &h) == 0);
-  size_t frames = (m.len - 32) / 258;
-  CHECK_EQ_U64(frames, 7);
-  CHECK_EQ_U64(h.sample_count, 505 * frames);
-  CHECK_EQ_U64(h.payload_crc32, e32_crc32_update(0, m.buf + 32, frames * 258));
+  CHECK_EQ_U64(h.sample_count, E32_UNFINALIZED);
   free(pcm);
+}
+
+/* The end record itself does not fit: the note stays unfinalized with every frame intact. */
+static void end_record_does_not_fit(void) {
+  static mem_sink_t m;
+  e32_writer_t w;
+  int16_t s = 1;
+  e32_sink_t sk = sink_for(&m);
+  m.limit = 32 + 258 + E32_END_BYTES - 1;
+  CHECK(e32_writer_open(&w, E32_CODEC_ADPCM, 16000, 1, 2, START_US, sk) == 0);
+  CHECK(e32_writer_push(&w, &s, 1) == 0);
+  CHECK(e32_writer_close(&w) == -2);
+  CHECK_EQ_U64(m.len, 32 + 258);
 }
 
 int main(void) {
@@ -107,6 +130,7 @@ int main(void) {
   empty_note();
   one_sample_note();
   rejects_opus();
-  sink_full_midway_still_finalizes();
+  sink_full_midway_stays_unfinalized();
+  end_record_does_not_fit();
   return 0;
 }

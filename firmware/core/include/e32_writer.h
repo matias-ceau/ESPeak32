@@ -6,9 +6,9 @@
 #include "e32_adpcm.h"
 #include "e32_container.h"
 
+/* Append-only: the writer never seeks back, so a flash filesystem never has to copy the note to finalize it. */
 typedef struct {
   int (*append)(void *ctx, const uint8_t *data, size_t len); /* 0 ok, nonzero error */
-  int (*rewrite_header)(void *ctx, const uint8_t header[E32_HEADER_BYTES]);
   void *ctx;
 } e32_sink_t;
 
@@ -27,7 +27,9 @@ int e32_writer_open(e32_writer_t *w, uint8_t codec, uint16_t sample_rate, uint32
                     uint32_t boot_id, uint64_t start_us, e32_sink_t sink);
 /* 0 ok; -2 sticky sink error */
 int e32_writer_push(e32_writer_t *w, const int16_t *pcm, size_t n);
-/* Always attempts rewrite_header; returns 0 or the first sticky error. */
+/* Flushes the last block and appends the end record; returns 0 or the first sticky error. After a sink error the end
+ * record is not written (the failed append may have left a partial frame), so the note stays unfinalized but
+ * decodable up to its last complete frame. */
 int e32_writer_close(e32_writer_t *w);
 
 #endif

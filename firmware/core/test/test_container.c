@@ -22,8 +22,17 @@ int main(void) {
   bad[0] = 'X';
   CHECK(e32_header_unpack(bad, &g) == -1);
   memcpy(bad, GOLDEN, 32);
-  bad[4] = 2;
+  bad[4] = 3;
   CHECK(e32_header_unpack(bad, &g) == -2);
+  bad[4] = 0;
+  CHECK(e32_header_unpack(bad, &g) == -2);
+  bad[4] = 2; /* the current version */
+  CHECK(e32_header_unpack(bad, &g) == 0 && g.version == 2);
+
+  uint8_t end[E32_END_BYTES];
+  CHECK(e32_end_pack(505, 0xDEADBEEFu, end) == E32_END_BYTES);
+  const uint8_t want_end[E32_END_BYTES] = {0xff, 0xff, 'E', '3', '2', 'E', 0xf9, 0x01, 0, 0, 0xef, 0xbe, 0xad, 0xde};
+  CHECK(memcmp(end, want_end, E32_END_BYTES) == 0);
 
   const uint8_t payload[3] = {1, 2, 3};
   uint8_t fr[8];

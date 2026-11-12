@@ -60,12 +60,29 @@ static void blink_error(void) {
   status_led_set(LED_OFF);
 }
 
+/* Counts what reaches the file, so free space can be tracked without asking LittleFS (which walks the whole
+ * filesystem to answer) while audio is waiting in the DMA ring. */
+typedef struct {
+  e32_sink_t inner;
+  size_t bytes;
+} counting_sink_t;
+
+static int counting_append(void *ctx, const uint8_t *data, size_t len) {
+  counting_sink_t *c = ctx;
+  int rc = c->inner.append(c->inner.ctx, data, len);
+  if (rc == 0) c->bytes += len;
+  return rc;
+}
+
 static void record_one_note(void) {
   static e32_writer_t writer;
   static e32_dsp_t dsp;
   static int32_t slots[SLOTS_PER_READ];
   static int16_t pcm[SLOTS_PER_READ];
+  static counting_sink_t counted;
 
+  int64_t t_start = esp_timer_get_time();
+  uint32_t overruns_at_start = audio_capture_overruns();
   uint32_t id = store_next_file_id();
   e32_sink_t sink;
   void *handle = NULL;
@@ -74,8 +91,11 @@ static void record_one_note(void) {
     blink_error();
     return;
   }
-  if (e32_writer_open(&writer, CODEC, SAMPLE_RATE, id, store_boot_id(), (uint64_t)esp_timer_get_time(),
-                      sink) != 0) {
+  /* The one slow free-space query of the note; the DMA ring holds 320 ms, so no audio is lost meanwhile. */
+  size_t free_at_start = store_free_bytes();
+  counted = (counting_sink_t){sink, 0};
+  if (e32_writer_open(&writer, CODEC, SAMPLE_RATE, id, store_boot_id(), (uint64_t)t_start,
+                      (e32_sink_t){counting_append, &counted}) != 0) {
     ESP_LOGE(TAG, "writer open failed");
     store_sink_close(handle);
     blink_error();
@@ -121,13 +141,14 @@ static void record_one_note(void) {
       ESP_LOGW(TAG, "maximum note length reached");
       break;
     }
-    if (++loops % LOOPS_PER_SECOND == 0) { /* free-space query and flash commit are slow: once a second */
+    if (++loops % LOOPS_PER_SECOND == 0) { /* the flash commit is slow: once a second */
       if (!store_sink_sync(handle)) {
         ESP_LOGE(TAG, "flash sync failed");
         failed = true;
         break;
       }
-      if (store_free_bytes() < FREE_HEADROOM_BYTES) {
+      size_t used = counted.bytes + counted.bytes / 64; /* plus a margin for LittleFS block pointers and metadata */
+      if (free_at_start < used + FREE_HEADROOM_BYTES) {
         ESP_LOGW(TAG, "storage nearly full, stopping");
         failed = true;
         break;
@@ -141,8 +162,10 @@ static void record_one_note(void) {
     }
   }
 
+  uint32_t wall_ms = (uint32_t)((esp_timer_get_time() - t_start) / 1000);
+  uint32_t overruns = audio_capture_overruns() - overruns_at_start;
   int rc = e32_writer_close(&writer);
-  store_sink_close(handle);
+  if (!store_sink_close(handle) && rc == 0) rc = -2;
   s_recording = false;
   s_active_id = 0;
   status_led_set(LED_OFF);
@@ -154,8 +177,12 @@ static void record_one_note(void) {
   char path[48];
   struct stat st = {0};
   if (store_path(id, path, sizeof path)) stat(path, &st);
-  ESP_LOGI(TAG, "saved note id=%u samples=%llu bytes=%u%s", (unsigned)id, (unsigned long long)total,
-           (unsigned)st.st_size, rc ? " (finalize error)" : "");
+  ESP_LOGI(TAG, "saved note id=%u samples=%llu (%u ms of audio, %u ms wall) bytes=%u overruns=%u%s", (unsigned)id,
+           (unsigned long long)total, (unsigned)(total * 1000 / SAMPLE_RATE), (unsigned)wall_ms,
+           (unsigned)st.st_size, (unsigned)overruns, rc ? " (write error: left unfinalized, still decodable)" : "");
+  if (overruns)
+    ESP_LOGW(TAG, "%u ms of audio dropped: the recorder fell behind the microphone (DMA ring overrun)",
+             (unsigned)(overruns * AUDIO_CAPTURE_BUFFER_FRAMES * 1000 / SAMPLE_RATE));
   if (failed || rc) blink_error();
   ble_advertise_for(ADVERTISE_AFTER_NOTE_MS);
 }

@@ -46,6 +46,15 @@ menu "ESPeak32"
         default 8
         help
             ESP32-S3-DevKitC-1 v1.0 and most clones: RGB LED on GPIO48; DevKitC-1 v1.1: GPIO38.
+            ESP32-C3 Super Mini: plain blue LED on GPIO8.
+
+    config ESPEAK32_LED_ACTIVE_LOW
+        bool "Plain LED lights when the pin is low"
+        depends on ESPEAK32_LED_GPIO
+        default n
+        help
+            Set for an LED wired from 3V3 to the pin, as on the ESP32-C3 Super Mini (GPIO8). If the LED stays lit
+            while idle and goes dark when recording, flip this.
 
     config ESPEAK32_MIC_GAIN_SHIFT
         int "Digital gain as a left shift (0..6)"

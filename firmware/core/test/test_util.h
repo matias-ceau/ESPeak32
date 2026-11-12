@@ -50,7 +50,6 @@ static inline uint8_t *read_file(const char *path, size_t *len) {
 typedef struct {
   uint8_t buf[1 << 17];
   size_t len, limit;
-  int rewrites;
 } mem_sink_t;
 
 static inline int mem_append(void *ctx, const uint8_t *d, size_t n) {
@@ -58,12 +57,6 @@ static inline int mem_append(void *ctx, const uint8_t *d, size_t n) {
   if (m->len + n > m->limit) return 1;
   memcpy(m->buf + m->len, d, n);
   m->len += n;
-  return 0;
-}
-static inline int mem_rewrite(void *ctx, const uint8_t *h) {
-  mem_sink_t *m = ctx;
-  memcpy(m->buf, h, 32);
-  m->rewrites++;
   return 0;
 }
 

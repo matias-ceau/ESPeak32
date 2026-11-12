@@ -23,7 +23,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Record<string,
 function durationS(bytes: Uint8Array): number {
   try {
     const f = parseE32(bytes);
-    const n = f.finalized ? f.header.sampleCount
+    const n = f.finalized ? f.sampleCount
       : f.header.codec === CODEC_ADPCM ? f.frames.length * BLOCK_SAMPLES : f.frames.reduce((s, x) => s + x.length, 0) / 2;
     return n / f.header.sampleRate;
   } catch {

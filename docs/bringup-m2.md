@@ -3,11 +3,11 @@
 Goal: a note recorded on the device reaches the phone app and the PC over BLE, survives a dropped link, and is deleted
 from the device only after it is stored. Do M1 (`docs/bringup-m1.md`) first.
 
-1. **Flash** firmware 0.2.0: `cd firmware && idf.py -p <port> flash monitor`. The boot log has no BLE errors.
+1. **Flash** firmware 0.3.0: `cd firmware && idf.py -p <port> flash monitor`. The boot log has no BLE errors.
 2. **Record** a note of about 30 s (switch on, speak, switch off). The log shows `saved note id=N` then
    `advertising for 60 s`; the LED blinks blue.
 3. **PC first** (easier to debug): `espeak32 ble scan` lists the device. `espeak32 ble info` pairs (Just Works; accept
-   any OS prompt) and prints `firmware: 0.2.0`. Then `espeak32 ble sync --out notes/ --wav` and listen to the WAV.
+   any OS prompt) and prints `firmware: 0.3.0`. Then `espeak32 ble sync --out notes/ --wav` and listen to the WAV.
    Note the time it took and the size, and fill in `docs/measurements.md` (KB/s).
 4. **Resume:** record a long note (2 min), start `espeak32 ble sync --out notes/`, and halfway through switch the PC's
    Bluetooth off for 5 s and on again (or walk away). The device advertises again for 60 s after the drop; rerun the

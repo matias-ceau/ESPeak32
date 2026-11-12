@@ -10,7 +10,7 @@ int e32_writer_open(e32_writer_t *w, uint8_t codec, uint16_t sample_rate, uint32
   memset(w, 0, sizeof *w);
   w->sink = sink;
   w->block_samples = codec == E32_CODEC_ADPCM ? E32_ADPCM_BLOCK_SAMPLES : 256;
-  w->hdr = (e32_header_t){1, codec, sample_rate, file_id, boot_id, start_us, E32_UNFINALIZED, 0};
+  w->hdr = (e32_header_t){E32_FORMAT_VERSION, codec, sample_rate, file_id, boot_id, start_us, E32_UNFINALIZED, 0};
   e32_adpcm_enc_init(&w->enc);
   uint8_t h[E32_HEADER_BYTES];
   e32_header_pack(&w->hdr, h);
@@ -62,11 +62,9 @@ int e32_writer_push(e32_writer_t *w, const int16_t *pcm, size_t n) {
 
 int e32_writer_close(e32_writer_t *w) {
   if (w->staged > 0 && !w->err) flush_block(w);
-  w->hdr.sample_count = w->appended_samples;
-  w->hdr.payload_crc32 = w->crc;
-  uint8_t h[E32_HEADER_BYTES];
-  e32_header_pack(&w->hdr, h);
-  int rc = w->sink.rewrite_header(w->sink.ctx, h);
   if (w->err) return w->err;
-  return rc != 0 ? -2 : 0;
+  uint8_t end[E32_END_BYTES];
+  e32_end_pack(w->appended_samples, w->crc, end);
+  if (w->sink.append(w->sink.ctx, end, sizeof end) != 0) w->err = -2;
+  return w->err;
 }

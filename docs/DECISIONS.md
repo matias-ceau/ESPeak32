@@ -97,3 +97,45 @@ link cut mid-transfer resumes automatically. Found on the way, all on the PC sid
   in between, and ignores disconnects before the link is up.
 - Bluetooth errors now print a clear message (exit 4) instead of a traceback.
 - Firmware: `adv [seconds]` console command opens the advertising window over USB (no switch needed for tests).
+
+## 2026-11-12 — File format v2: an end record instead of rewriting the header
+
+- **Problem:** LittleFS copies a whole file to change its first bytes, so rewriting the header at save cost a second
+  full write of the note and needed free space at least the note's size plus 64 KiB. On the C3 (about 2.9 MB of audio
+  storage) a note longer than about 3 minutes could never be finalized, even on an empty device.
+- **Decision:** version 2 never rewrites the header. The writer appends a 14-byte end record
+  `[u16 0xFFFF]["E32E"][u32 sample_count][u32 payload_crc32]`; the header's count and CRC fields stay at their
+  unfinalized values. `0xFFFF` is never a frame length. A missing, cut or garbled end record means unfinalized (still
+  decodable), exactly as before. After a failed write no end record is added (the failure may have left a partial
+  frame). Firmware 0.3.0. The BLE protocol is unchanged.
+- **Compatibility:** Python, C and the app read versions 1 and 2, so notes already synced to the phone keep working.
+  Committed vectors: version 2 under the plain names, version 1 under `protocol/vectors/v1/`; every reader is tested
+  on both. An app older than this change rejects version 2 notes (unsupported version) and skips them without deleting
+  them from the device; open the app online once to update it (the service worker is network-first).
+
+## 2026-11-12 — Recording loop: 320 ms DMA ring, overrun counter, no free-space walk
+
+The recorder writes flash in the same loop that drains the microphone, and the I2S DMA ring held only 120 ms. Once a
+second it also asked LittleFS for free space, which traverses the whole filesystem (`lfs_fs_size`), so it slows as
+storage fills; a stall longer than the ring silently drops 20 ms buffers. Now: a 320 ms ring (16 x 20 ms, about 20 KB
+of DMA memory), one free-space query per note with the rest estimated from bytes written plus a 1/64 margin, and the
+driver's queue-overflow callback counted and logged at every save (`overruns=N`). Not yet measured on hardware. If
+overruns appear, the next step is a separate writer task with a larger PCM buffer.
+
+## 2026-11-12 — ESP32-C3 Super Mini target and pins
+
+- Per-target defaults: `sdkconfig.defaults` holds the shared settings; `sdkconfig.defaults.esp32s3` (8 MB,
+  `partitions.csv`, toggle switch, WS2812) and `sdkconfig.defaults.esp32c3` (4 MB, `partitions_4mb.csv`) hold the
+  boards. CI builds both.
+- C3 pins: INMP441 on GPIO5/6/7 (adjacent on the header), push button on GPIO3 (only GPIO0-5 can wake the C3 from
+  deep sleep), GPIO4 kept for the battery divider (ADC1), blue LED on GPIO8 (active low; new Kconfig option). Strapping
+  pins 2, 8 (LED only) and 9 (BOOT) are not used for inputs.
+- 4 MB layout: 1 MB app (image 629 KB for firmware 0.3.0 per CI, 622 KB on the S3; about 0.4 MB left, so check
+  the size when Opus is added), 2.9 MB of notes (about 6 min of ADPCM).
+
+## 2026-11-12 — New BLE bonds only in the long-press window (answers the M2 open question)
+
+Just Works pairing is accepted in every advertising window today, so anyone nearby can bond in the 60 s after each
+note. Decision: accept new bonds only in the 120 s window opened on purpose (long press, quick switch flick or the
+`adv` console command); after-note and reconnect windows serve already-bonded devices only. Not implemented yet: it
+changes NimBLE pairing handling, which needs the board to test. Planned for the C3 bring-up.

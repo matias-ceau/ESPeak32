@@ -27,7 +27,7 @@ def test_cli_ble_list_prints_notes(capsys):
     dev = DeviceModel({1: TONE, 2: EMPTY})
     assert main(["ble", "list"], connect_ble=fake_connect(dev)) == 0
     lines = capsys.readouterr().out.strip().splitlines()
-    assert [ln.split("\t")[:2] for ln in lines] == [["1", "8288"], ["2", "32"]]
+    assert [ln.split("\t")[:2] for ln in lines] == [["1", str(len(TONE))], ["2", str(len(EMPTY))]]
 
 
 def test_cli_ble_info(capsys):

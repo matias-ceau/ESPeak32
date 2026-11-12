@@ -51,21 +51,31 @@ void status_led_set(led_state_t s) {
 #else
 #include "driver/gpio.h"
 
+#ifdef CONFIG_ESPEAK32_LED_ACTIVE_LOW
+#define LED_ON_LEVEL 0 /* LED from 3V3 to the pin, e.g. the C3 Super Mini's GPIO8 */
+#else
+#define LED_ON_LEVEL 1
+#endif
+
+static void led_write(bool on) { gpio_set_level(CONFIG_ESPEAK32_PIN_LED, on ? LED_ON_LEVEL : !LED_ON_LEVEL); }
+
 void status_led_init(void) {
+  led_write(false); /* latch "off" before the pin becomes an output, so it does not flash */
   gpio_config_t out = {.pin_bit_mask = 1ULL << CONFIG_ESPEAK32_PIN_LED, .mode = GPIO_MODE_OUTPUT};
   gpio_config(&out);
   for (int i = 0; i < 3; i++) {
-    gpio_set_level(CONFIG_ESPEAK32_PIN_LED, 1);
+    led_write(true);
     vTaskDelay(pdMS_TO_TICKS(150));
-    gpio_set_level(CONFIG_ESPEAK32_PIN_LED, 0);
+    led_write(false);
     vTaskDelay(pdMS_TO_TICKS(150));
   }
+  ESP_LOGI(TAG, "LED self-test done (GPIO%d, lit when %s)", CONFIG_ESPEAK32_PIN_LED, LED_ON_LEVEL ? "high" : "low");
   status_led_set(LED_OFF);
 }
 
 void status_led_set(led_state_t s) {
   if (s == s_state) return;
   s_state = s;
-  gpio_set_level(CONFIG_ESPEAK32_PIN_LED, s != LED_OFF);
+  led_write(s != LED_OFF);
 }
 #endif
