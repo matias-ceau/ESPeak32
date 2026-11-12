@@ -39,10 +39,12 @@ export class Db {
     return this.idb.transaction(name, mode).objectStore(name);
   }
 
-  /** Resolves once the write is durable (transaction complete), which the two-phase delete relies on. */
+  /** Resolves once the write is on disk, which the two-phase delete relies on: with delete-after-sync, the note is
+   *  deleted from the device right after this. Chrome's default ("relaxed") reports completion before the data is
+   *  flushed, so a crash or power loss could still lose it; "strict" waits for the flush. */
   private write(name: string, fn: (s: IDBObjectStore) => void): Promise<void> {
     return new Promise((resolve, reject) => {
-      const tx = this.idb.transaction(name, "readwrite");
+      const tx = this.idb.transaction(name, "readwrite", { durability: "strict" });
       fn(tx.objectStore(name));
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);

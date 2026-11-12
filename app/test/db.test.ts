@@ -53,3 +53,24 @@ describe("requestPersistence", () => {
   test("refused", async () => expect(await requestPersistence(storage(false, false))).toBe("best-effort"));
   test("no Storage API", async () => expect(await requestPersistence(undefined)).toBe("unsupported"));
 });
+
+test("every write asks for strict durability (the device deletes a note right after it is stored)", async () => {
+  const db = await fresh();
+  const seen: Array<IDBTransactionOptions | undefined> = [];
+  const orig = IDBDatabase.prototype.transaction;
+  IDBDatabase.prototype.transaction = function (this: IDBDatabase, ...args: Parameters<IDBDatabase["transaction"]>) {
+    if (args[1] === "readwrite") seen.push(args[2]);
+    return orig.apply(this, args);
+  };
+  try {
+    await db.putNote(note(1, 1000));
+    await db.appendSegment("k", 0, new Uint8Array([1]));
+    await db.clearSegments("k");
+    await db.putClock(1, 2, 3n);
+    await db.setSetting("x", true);
+  } finally {
+    IDBDatabase.prototype.transaction = orig;
+  }
+  expect(seen).toHaveLength(5);
+  expect(seen.every((o) => o?.durability === "strict")).toBe(true);
+});
