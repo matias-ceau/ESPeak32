@@ -112,3 +112,12 @@ link cut mid-transfer resumes automatically. Found on the way, all on the PC sid
   Committed vectors: version 2 under the plain names, version 1 under `protocol/vectors/v1/`; every reader is tested
   on both. An app older than this change rejects version 2 notes (unsupported version) and skips them without deleting
   them from the device; open the app online once to update it (the service worker is network-first).
+
+## 2026-11-12 — Recording loop: 320 ms DMA ring, overrun counter, no free-space walk
+
+The recorder writes flash in the same loop that drains the microphone, and the I2S DMA ring held only 120 ms. Once a
+second it also asked LittleFS for free space, which traverses the whole filesystem (`lfs_fs_size`), so it slows as
+storage fills; a stall longer than the ring silently drops 20 ms buffers. Now: a 320 ms ring (16 x 20 ms, about 20 KB
+of DMA memory), one free-space query per note with the rest estimated from bytes written plus a 1/64 margin, and the
+driver's queue-overflow callback counted and logged at every save (`overruns=N`). Not yet measured on hardware. If
+overruns appear, the next step is a separate writer task with a larger PCM buffer.

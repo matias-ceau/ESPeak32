@@ -27,6 +27,9 @@ Goal: an intelligible voice note on your PC, produced end to end.
 
 ## Extra checks for the storage layer (not covered by host tests)
 
+- **No dropped audio (firmware >= 0.3.0):** every save logs `overruns=N`; it must be 0. Check it on a long note with
+  the storage nearly full, the worst case for flash stalls. Any overrun also logs how many ms were dropped.
+
 - **Power cut:** start a note, speak for ~20 s, pull the USB cable mid-note, reconnect. `espeak32 ls` should list the
   note; `espeak32 dump ... --decode` should decode most of it with the warning "file not finalized".
 - **Long notes (firmware >= 0.3.0):** a note is finalized by appending a 14-byte end record, so even a note that fills

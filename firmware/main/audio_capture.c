@@ -1,14 +1,30 @@
 #include "audio_capture.h"
 
 #include "driver/i2s_std.h"
+#include "esp_attr.h"
 #include "sdkconfig.h"
 
+/* DMA ring: 16 buffers of 320 frames (20 ms each) = 320 ms of audio, about 20 KB of DMA memory. The recorder loop
+ * stalls while flash writes and syncs run; if a stall outlasts the ring the driver drops the oldest buffer, which
+ * on_recv_q_ovf counts. */
+#define DMA_BUFFERS 16
+#define DMA_FRAMES AUDIO_CAPTURE_BUFFER_FRAMES
+
 static i2s_chan_handle_t s_rx;
+static volatile uint32_t s_overruns;
+
+static bool IRAM_ATTR on_overrun(i2s_chan_handle_t handle, i2s_event_data_t *event, void *ctx) {
+  (void)handle;
+  (void)event;
+  (void)ctx;
+  s_overruns++; /* only this ISR writes it; 32-bit stores are atomic on Xtensa and RISC-V */
+  return false;
+}
 
 esp_err_t audio_capture_start(void) {
   i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
-  cc.dma_desc_num = 6;
-  cc.dma_frame_num = 320;
+  cc.dma_desc_num = DMA_BUFFERS;
+  cc.dma_frame_num = DMA_FRAMES;
   esp_err_t err = i2s_new_channel(&cc, NULL, &s_rx);
   if (err != ESP_OK) return err;
 
@@ -27,6 +43,9 @@ esp_err_t audio_capture_start(void) {
   sc.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT; /* INMP441 L/R pin tied to GND */
   err = i2s_channel_init_std_mode(s_rx, &sc);
   if (err != ESP_OK) return err;
+  const i2s_event_callbacks_t cbs = {.on_recv_q_ovf = on_overrun}; /* must be registered before enabling */
+  err = i2s_channel_register_event_callback(s_rx, &cbs, NULL);
+  if (err != ESP_OK) return err;
   return i2s_channel_enable(s_rx);
 }
 
@@ -36,6 +55,8 @@ int audio_capture_read(int32_t *slots, size_t max_slots, uint32_t timeout_ms) {
   if (err != ESP_OK && err != ESP_ERR_TIMEOUT) return -1;
   return (int)(got / sizeof(int32_t));
 }
+
+uint32_t audio_capture_overruns(void) { return s_overruns; }
 
 void audio_capture_stop(void) {
   if (!s_rx) return;
