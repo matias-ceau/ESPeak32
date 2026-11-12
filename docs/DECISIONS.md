@@ -130,7 +130,8 @@ overruns appear, the next step is a separate writer task with a larger PCM buffe
 - C3 pins: INMP441 on GPIO5/6/7 (adjacent on the header), push button on GPIO3 (only GPIO0-5 can wake the C3 from
   deep sleep), GPIO4 kept for the battery divider (ADC1), blue LED on GPIO8 (active low; new Kconfig option). Strapping
   pins 2, 8 (LED only) and 9 (BOOT) are not used for inputs.
-- 4 MB layout: 1 MB app (about 0.35 MB used, room for Opus), 2.9 MB of notes (about 6 min of ADPCM).
+- 4 MB layout: 1 MB app (image 629 KB for firmware 0.3.0 per CI, 622 KB on the S3; about 0.4 MB left, so check
+  the size when Opus is added), 2.9 MB of notes (about 6 min of ADPCM).
 
 ## 2026-11-12 — New BLE bonds only in the long-press window (answers the M2 open question)
 

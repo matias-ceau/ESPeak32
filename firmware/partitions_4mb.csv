@@ -1,4 +1,4 @@
-# 4 MB flash (ESP32-C3 Super Mini). The app takes about 0.35 MB; 1 MB leaves room for Opus later.
+# 4 MB flash (ESP32-C3 Super Mini). The app image is 0.63 MB (firmware 0.3.0, CI); 1 MB leaves about 0.4 MB.
 # Name,   Type, SubType,  Offset,   Size
 nvs,      data, nvs,      0x9000,   0x6000
 phy_init, data, phy,      0xf000,   0x1000
