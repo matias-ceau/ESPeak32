@@ -14,7 +14,7 @@ export function decodeE32(data: Uint8Array): Decoded {
   const warnings: string[] = [];
   const pcmBytes = f.frames.reduce((s, fr) => s + fr.length, 0);
   let count: number;
-  if (f.finalized) count = f.header.sampleCount;
+  if (f.finalized) count = f.sampleCount;
   else {
     warnings.push("file not finalized (recording was interrupted)");
     count = f.header.codec === CODEC_ADPCM ? f.frames.length * BLOCK_SAMPLES : pcmBytes >> 1;

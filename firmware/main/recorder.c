@@ -142,7 +142,7 @@ static void record_one_note(void) {
   }
 
   int rc = e32_writer_close(&writer);
-  store_sink_close(handle);
+  if (!store_sink_close(handle) && rc == 0) rc = -2;
   s_recording = false;
   s_active_id = 0;
   status_led_set(LED_OFF);
@@ -155,7 +155,7 @@ static void record_one_note(void) {
   struct stat st = {0};
   if (store_path(id, path, sizeof path)) stat(path, &st);
   ESP_LOGI(TAG, "saved note id=%u samples=%llu bytes=%u%s", (unsigned)id, (unsigned long long)total,
-           (unsigned)st.st_size, rc ? " (finalize error)" : "");
+           (unsigned)st.st_size, rc ? " (write error: left unfinalized, still decodable)" : "");
   if (failed || rc) blink_error();
   ble_advertise_for(ADVERTISE_AFTER_NOTE_MS);
 }

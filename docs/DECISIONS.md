@@ -97,3 +97,18 @@ link cut mid-transfer resumes automatically. Found on the way, all on the PC sid
   in between, and ignores disconnects before the link is up.
 - Bluetooth errors now print a clear message (exit 4) instead of a traceback.
 - Firmware: `adv [seconds]` console command opens the advertising window over USB (no switch needed for tests).
+
+## 2026-11-12 — File format v2: an end record instead of rewriting the header
+
+- **Problem:** LittleFS copies a whole file to change its first bytes, so rewriting the header at save cost a second
+  full write of the note and needed free space at least the note's size plus 64 KiB. On the C3 (about 2.9 MB of audio
+  storage) a note longer than about 3 minutes could never be finalized, even on an empty device.
+- **Decision:** version 2 never rewrites the header. The writer appends a 14-byte end record
+  `[u16 0xFFFF]["E32E"][u32 sample_count][u32 payload_crc32]`; the header's count and CRC fields stay at their
+  unfinalized values. `0xFFFF` is never a frame length. A missing, cut or garbled end record means unfinalized (still
+  decodable), exactly as before. After a failed write no end record is added (the failure may have left a partial
+  frame). Firmware 0.3.0. The BLE protocol is unchanged.
+- **Compatibility:** Python, C and the app read versions 1 and 2, so notes already synced to the phone keep working.
+  Committed vectors: version 2 under the plain names, version 1 under `protocol/vectors/v1/`; every reader is tested
+  on both. An app older than this change rejects version 2 notes (unsupported version) and skips them without deleting
+  them from the device; open the app online once to update it (the service worker is network-first).

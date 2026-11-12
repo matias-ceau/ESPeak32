@@ -43,7 +43,7 @@ static void matches_vector(void) {
     done += take;
     blocks++;
   }
-  CHECK_EQ_U64(pos, file_len);
+  CHECK_EQ_U64(pos + E32_END_BYTES, file_len); /* then the version 2 end record */
   CHECK(blocks > 1);
   free(raw);
   free(file);

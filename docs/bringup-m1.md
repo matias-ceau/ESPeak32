@@ -29,5 +29,6 @@ Goal: an intelligible voice note on your PC, produced end to end.
 
 - **Power cut:** start a note, speak for ~20 s, pull the USB cable mid-note, reconnect. `espeak32 ls` should list the
   note; `espeak32 dump ... --decode` should decode most of it with the warning "file not finalized".
-- **Long notes:** LittleFS finalizes by copying the file, so a note can only be finalized while free space is at least
-  its own size plus 64 KiB. Otherwise the log says "note left unfinalized"; the audio is still decodable.
+- **Long notes (firmware >= 0.3.0):** a note is finalized by appending a 14-byte end record, so even a note that fills
+  the storage is finalized. Record until the device stops on its own ("storage nearly full"); `espeak32 dump ...
+  --decode` must decode it without the "file not finalized" warning.

@@ -66,3 +66,12 @@ def test_decode_pcm16_file():
     pcm = tone(600)
     data = build(CODEC_PCM16, 16000, 1, 1, 0, 600, pcm16_encode(pcm))
     assert decode_e32(data).samples == pcm
+
+
+def test_v1_notes_still_decode_like_v2():
+    from pathlib import Path
+
+    vec = Path(__file__).resolve().parents[2] / "protocol" / "vectors"
+    for name in ("tone_16k.adpcm.e32", "tone_16k.pcm16.e32", "tone_16k.unfinalized.e32"):
+        v2, v1 = decode_e32((vec / name).read_bytes()), decode_e32((vec / "v1" / name).read_bytes())
+        assert v1.samples == v2.samples and v1.warnings == v2.warnings and v1.crc_ok == v2.crc_ok, name

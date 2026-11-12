@@ -20,7 +20,7 @@ Avoid strapping pins (0, 3, 45, 46), USB pins (19, 20) and the flash/PSRAM pins.
 different free pins; set them through menuconfig. The firmware expects the partition table in `firmware/partitions.csv`
 (8 MB flash).
 
-## Record control and LED behaviour (firmware 0.2.0)
+## Record control and LED behaviour (firmware 0.2.0 and later)
 
 The v0 breadboard uses a **latching toggle switch** between GPIO7 and GND (the default, `Record control` in
 menuconfig). A momentary push button works too: select it in menuconfig.

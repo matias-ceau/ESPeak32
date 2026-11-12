@@ -57,10 +57,9 @@ Later decisions are in `docs/DECISIONS.md`.
 - ESP-IDF's own console-channel choice is used (sdkconfig.defaults: USB-Serial-JTAG), not a duplicate Kconfig choice.
 - ADPCM uses the reference IMA shift arithmetic (bit-exact with FFmpeg >= 9). It was FFmpeg 6.1's multiply form
   until 2026-10-15; see `docs/DECISIONS.md` for why it changed.
-- LittleFS cannot rewrite the header in place cheaply (it copies the file). The sink syncs once a second and only
-  rewrites the header if free space >= file size + 64 KiB; otherwise the note stays unfinalized (still decodable, no
-  CRC). A trailer-based finalization (contract change) was NOT done: revisit if long notes end up unfinalized.
-- No host test of the real LittleFS sink (would need littlefs's RAM block device); those fixes are only proven on hardware.
+- Notes are append-only (file format v2, 2026-11-12): an end record replaces the header rewrite, which LittleFS
+  implemented by copying the whole file. The sink syncs once a second, so a power cut keeps a decodable note.
+- No host test of the real LittleFS sink (would need littlefs's RAM block device); it is only proven on hardware.
 
 ## Deferred minors (from the final review)
 Stuck-high mic data line not flagged as silent; `ls`/`rmall` capped at 128 notes; failed mount silently formats the

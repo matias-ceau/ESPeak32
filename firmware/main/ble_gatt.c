@@ -20,7 +20,7 @@
 void ble_store_config_init(void); /* not exported by a public header in ESP-IDF 5.4 */
 
 #define DEVICE_NAME "ESPeak32"
-#define FW_VERSION {0, 2, 0}
+#define FW_VERSION {0, 3, 0} /* 0.3.0: notes in file format v2 (end record, no header rewrite) */
 #define CODECS_MASK 0x03 /* PCM16 + IMA-ADPCM */
 #define RECONNECT_WINDOW_MS 60000
 #define MAX_REQUEST 20

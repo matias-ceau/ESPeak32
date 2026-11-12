@@ -21,27 +21,9 @@ static SemaphoreHandle_t s_read_lock; /* guards the read cache against a concurr
 static FILE *s_read_file;
 static uint32_t s_read_id;
 
+/* Notes are append-only (file format v2): LittleFS would copy the whole file to change its first bytes. */
 static int sink_append(void *ctx, const uint8_t *data, size_t len) {
   return fwrite(data, 1, len, (FILE *)ctx) == len ? 0 : 1;
-}
-
-/* LittleFS cannot overwrite in place: rewriting offset 0 copies the rest of the file into new blocks, which needs
- * about file-size bytes free. Commit what exists first so a failed or skipped finalize leaves a decodable
- * (unfinalized) note, and only attempt the rewrite when the copy fits. */
-#define FINALIZE_HEADROOM (64 * 1024)
-
-static int sink_rewrite_header(void *ctx, const uint8_t header[E32_HEADER_BYTES]) {
-  FILE *f = ctx;
-  if (fflush(f) != 0 || fsync(fileno(f)) != 0) return 1;
-  long len = ftell(f);
-  if (len < 0 || store_free_bytes() < (size_t)len + FINALIZE_HEADROOM) {
-    ESP_LOGW(TAG, "not enough free space to finalize header; note left unfinalized (still decodable)");
-    return 1;
-  }
-  if (fseek(f, 0, SEEK_SET) != 0) return 1;
-  if (fwrite(header, 1, E32_HEADER_BYTES, f) != E32_HEADER_BYTES) return 1;
-  if (fflush(f) != 0 || fseek(f, 0, SEEK_END) != 0 || fsync(fileno(f)) != 0) return 1;
-  return 0;
 }
 
 esp_err_t store_init(void) {
@@ -114,14 +96,18 @@ bool store_sink_open(uint32_t file_id, e32_sink_t *sink, void **handle) {
   FILE *f = fopen(path, "w+bx")  /* exclusive: never truncate an existing note */;
   if (!f) return false;
   sink->append = sink_append;
-  sink->rewrite_header = sink_rewrite_header;
   sink->ctx = f;
   *handle = f;
   return true;
 }
 
-void store_sink_close(void *handle) {
-  if (handle && fclose((FILE *)handle) != 0) ESP_LOGE(TAG, "fclose failed; note may be incomplete");
+bool store_sink_close(void *handle) {
+  FILE *f = handle;
+  if (!f) return false;
+  bool ok = fflush(f) == 0 && fsync(fileno(f)) == 0;
+  if (fclose(f) != 0) ok = false;
+  if (!ok) ESP_LOGE(TAG, "closing the note failed; it may be incomplete");
+  return ok;
 }
 
 bool store_sink_sync(void *handle) {

@@ -45,29 +45,33 @@ def generate(out_dir: Path) -> dict[str, bytes]:
     n = len(pcm)
     adpcm_frames = adpcm_encode(pcm)
 
-    def mk(codec, frames, count):
-        return build(codec, RATE, FILE_ID, BOOT_ID, START_US, count, frames)
+    # The current format (version 2, what the device writes) under the plain names; version 1 under v1/, which every
+    # reader must keep decoding (notes synced before firmware 0.3.0).
+    files: dict[str, bytes] = {}
+    for version, prefix in ((2, ""), (1, "v1/")):
+        def mk(codec, frames, count):
+            return build(codec, RATE, FILE_ID, BOOT_ID, START_US, count, frames, version)
 
-    files = {
-        "tone_16k.adpcm.e32": mk(CODEC_ADPCM, adpcm_frames, n),
-        "tone_16k.pcm16.e32": mk(CODEC_PCM16, pcm16_encode(pcm), n),
-        "empty.e32": mk(CODEC_ADPCM, [], 0),
-    }
-    unfinal_header = Header(CODEC_ADPCM, RATE, FILE_ID, BOOT_ID, START_US, UNFINALIZED, 0)
-    body = b"".join(pack_frame(b) for b in adpcm_frames[:-1])
-    body += pack_frame(adpcm_frames[-1])[: 2 + len(adpcm_frames[-1]) // 2]
-    files["tone_16k.unfinalized.e32"] = pack_header(unfinal_header) + body
+        files[prefix + "tone_16k.adpcm.e32"] = mk(CODEC_ADPCM, adpcm_frames, n)
+        files[prefix + "tone_16k.pcm16.e32"] = mk(CODEC_PCM16, pcm16_encode(pcm), n)
+        files[prefix + "empty.e32"] = mk(CODEC_ADPCM, [], 0)
+        # power cut mid-note: no end record (or header never rewritten), last frame half written
+        unfinal_header = Header(CODEC_ADPCM, RATE, FILE_ID, BOOT_ID, START_US, UNFINALIZED, 0, version)
+        body = b"".join(pack_frame(b) for b in adpcm_frames[:-1])
+        body += pack_frame(adpcm_frames[-1])[: 2 + len(adpcm_frames[-1]) // 2]
+        files[prefix + "tone_16k.unfinalized.e32"] = pack_header(unfinal_header) + body
 
     entries = []
     for name, data in files.items():
         f = parse(data)
         entries.append({
             "name": name,
+            "version": f.header.version,
             "codec": f.header.codec,
             "sample_rate": f.header.sample_rate,
-            "sample_count": f.header.sample_count,
+            "sample_count": f.sample_count,
             "finalized": f.finalized,
-            "payload_crc32": f"0x{f.header.payload_crc32:08x}",
+            "payload_crc32": f"0x{f.payload_crc32:08x}",
             "bytes": len(data),
         })
     manifest = {
@@ -89,6 +93,7 @@ def main(argv=None) -> int:
         s = tone_samples()
         (out / PCM_NAME).write_bytes(struct.pack(f"<{len(s)}h", *s))
     for name, data in generate(out).items():
+        (out / name).parent.mkdir(parents=True, exist_ok=True)
         (out / name).write_bytes(data)
     return 0
 

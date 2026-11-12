@@ -32,7 +32,7 @@ void e32_header_pack(const e32_header_t *h, uint8_t out[E32_HEADER_BYTES]) {
 
 int e32_header_unpack(const uint8_t in[E32_HEADER_BYTES], e32_header_t *h) {
   if (memcmp(in, "E32A", 4) != 0) return -1;
-  if (in[4] != 1) return -2;
+  if (in[4] != 1 && in[4] != 2) return -2;
   h->version = in[4];
   h->codec = in[5];
   h->sample_rate = get16(in + 6);
@@ -48,4 +48,12 @@ size_t e32_frame_pack(const uint8_t *payload, uint16_t len, uint8_t *out) {
   put16(out, len);
   memcpy(out + 2, payload, len);
   return (size_t)len + 2;
+}
+
+size_t e32_end_pack(uint32_t sample_count, uint32_t payload_crc32, uint8_t out[E32_END_BYTES]) {
+  put16(out, E32_END_MARKER);
+  memcpy(out + 2, "E32E", 4);
+  put32(out + 6, sample_count);
+  put32(out + 10, payload_crc32);
+  return E32_END_BYTES;
 }

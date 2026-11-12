@@ -20,7 +20,7 @@ def decode_e32(data: bytes) -> DecodeResult:
     f = parse(data)
     warnings: list[str] = []
     if f.finalized:
-        count = f.header.sample_count
+        count = f.sample_count
     else:
         warnings.append("file not finalized (recording was interrupted)")
         if f.header.codec == CODEC_ADPCM:

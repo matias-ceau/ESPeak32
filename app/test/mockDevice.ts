@@ -93,7 +93,8 @@ export class MockDevice {
       v.setUint32(6, id, true);
       v.setUint32(10, data.length, true);
       const hv = new DataView(data.buffer, data.byteOffset);
-      const ok = data.length >= 32 && new TextDecoder().decode(data.subarray(0, 4)) === "E32A" && data[4] === 1;
+      const ok = data.length >= 32 && new TextDecoder().decode(data.subarray(0, 4)) === "E32A" &&
+        (data[4] === 1 || data[4] === 2);
       b[14] = ok ? data[5] : 255;
       v.setUint32(15, ok ? hv.getUint32(12, true) : 0, true);
       v.setBigUint64(19, ok ? hv.getBigUint64(16, true) : 0n, true);
