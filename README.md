@@ -29,8 +29,12 @@ Do not dictate identifiable patient information.
 python3 -m venv .venv && .venv/bin/pip install -e 'tools[dev]'
 .venv/bin/pytest tools/tests -q                        # Python reference + vectors
 cmake -S firmware/core -B build/core && cmake --build build/core && ctest --test-dir build/core
-cd firmware && idf.py set-target esp32s3 && idf.py build    # needs ESP-IDF 5.4
+cd firmware && idf.py set-target esp32s3 && idf.py build    # S3 breadboard; needs ESP-IDF 5.4
+cd firmware && idf.py set-target esp32c3 && idf.py build    # C3 Super Mini (hardware/wiring-c3-supermini.md)
 ```
+
+`set-target` starts a fresh `sdkconfig` from `sdkconfig.defaults` plus `sdkconfig.defaults.<target>`. To keep both
+builds side by side: `idf.py -B build-c3 -D SDKCONFIG=build-c3/sdkconfig set-target esp32c3 build`.
 
 Record, dump and decode a note: see `docs/bringup-m1.md`.
 

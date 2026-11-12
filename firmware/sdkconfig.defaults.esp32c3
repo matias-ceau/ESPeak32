@@ -1,0 +1,14 @@
+# ESP32-C3 Super Mini, 4 MB flash: the cassette build (hardware/wiring-c3-supermini.md).
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_4mb.csv"
+# INMP441 on three adjacent header pins.
+CONFIG_ESPEAK32_PIN_I2S_BCLK=5
+CONFIG_ESPEAK32_PIN_I2S_WS=6
+CONFIG_ESPEAK32_PIN_I2S_SD=7
+# Momentary push button to GND. GPIO3 can wake the C3 from deep sleep (only GPIO0-5 can), for M4.
+CONFIG_ESPEAK32_PIN_BUTTON=3
+CONFIG_ESPEAK32_BUTTON_PUSH=y
+# The board's blue LED: GPIO8, lit when the pin is low.
+CONFIG_ESPEAK32_LED_GPIO=y
+CONFIG_ESPEAK32_PIN_LED=8
+CONFIG_ESPEAK32_LED_ACTIVE_LOW=y

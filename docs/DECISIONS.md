@@ -121,3 +121,20 @@ storage fills; a stall longer than the ring silently drops 20 ms buffers. Now: a
 of DMA memory), one free-space query per note with the rest estimated from bytes written plus a 1/64 margin, and the
 driver's queue-overflow callback counted and logged at every save (`overruns=N`). Not yet measured on hardware. If
 overruns appear, the next step is a separate writer task with a larger PCM buffer.
+
+## 2026-11-12 — ESP32-C3 Super Mini target and pins
+
+- Per-target defaults: `sdkconfig.defaults` holds the shared settings; `sdkconfig.defaults.esp32s3` (8 MB,
+  `partitions.csv`, toggle switch, WS2812) and `sdkconfig.defaults.esp32c3` (4 MB, `partitions_4mb.csv`) hold the
+  boards. CI builds both.
+- C3 pins: INMP441 on GPIO5/6/7 (adjacent on the header), push button on GPIO3 (only GPIO0-5 can wake the C3 from
+  deep sleep), GPIO4 kept for the battery divider (ADC1), blue LED on GPIO8 (active low; new Kconfig option). Strapping
+  pins 2, 8 (LED only) and 9 (BOOT) are not used for inputs.
+- 4 MB layout: 1 MB app (about 0.35 MB used, room for Opus), 2.9 MB of notes (about 6 min of ADPCM).
+
+## 2026-11-12 — New BLE bonds only in the long-press window (answers the M2 open question)
+
+Just Works pairing is accepted in every advertising window today, so anyone nearby can bond in the 60 s after each
+note. Decision: accept new bonds only in the 120 s window opened on purpose (long press, quick switch flick or the
+`adv` console command); after-note and reconnect windows serve already-bonded devices only. Not implemented yet: it
+changes NimBLE pairing handling, which needs the board to test. Planned for the C3 bring-up.

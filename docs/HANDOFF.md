@@ -1,8 +1,8 @@
 # Handoff: continue ESPeak32 from a session on the machine with the board
 
 Read this first, then `docs/superpowers/specs/2026-10-14-espeak32-voice-recorder-design.md` and
-`docs/superpowers/plans/2026-10-14-m0-m1-contract-and-mic.md`. Branch: `claude/diy-plaid-esp32-device-kb1755`
-(develop and push there; do not open a PR unless asked).
+`docs/superpowers/plans/2026-10-14-m0-m1-contract-and-mic.md`. Work lands on `main`; the 2026-11-12 work is on branch
+`ccr-6a4b7b57-w4vr2t` (draft PR) until merged.
 
 ## Who and how
 The user is a psychiatry resident (addiction medicine), prefers Python, and trusts the assistant to drive. They do not
@@ -26,7 +26,8 @@ Audio/text go to third-party models via OpenRouter; never put API keys in the re
     (the ffmpeg oracle test needs ffmpeg >= 9).
   - C: `cmake -S firmware/core -B build/core && cmake --build build/core && ctest --test-dir build/core` (7 tests).
   - Firmware: see `docs/DECISIONS.md` for the IDF 5.4.4 command on this machine (Python 3.12 shim).
-  - App: `cd app && npm ci && npm test && npm run build && PW_CHROMIUM=/usr/bin/chromium npx playwright test`.
+  - App: `cd app && npm ci && npm test && npm run build && PW_CHROMIUM=/usr/bin/chromium npx playwright test`
+    (the e2e run also builds and serves the production bundle for the offline test).
 - **2026-10-18, validated on hardware (ESP32-S3 DevKit + INMP441, toggle switch, on-board WS2812 LED):** recording,
   LittleFS storage, USB `dump` (47 KiB/s), playback; BLE pairing (Just Works, bonded with the PC), PC sync of 4 notes
   at 35.5 KiB/s byte-identical to the USB dumps, and resume after a link cut mid-transfer. Numbers in
@@ -35,21 +36,38 @@ Audio/text go to third-party models via OpenRouter; never put API keys in the re
   command opens an advertising window over USB, so tests need no physical action.
 - The user does not want to flash or touch the board once it is wired: flash and test remotely (`idf.py -p
   /dev/ttyACM0 flash`), ask only for unavoidable physical actions. Play audio through the Behringer UMC202HD.
+- **2026-11-12 (cloud session, no hardware; firmware 0.3.0, build-checked in CI only):**
+  - File format v2: notes end with a 14-byte end record instead of a header rewrite (LittleFS copied the whole file to
+    rewrite it). Python, C and the app read v1 and v2. `protocol/FILE_FORMAT.md`, `docs/DECISIONS.md`.
+  - Recording: 320 ms I2S DMA ring, DMA overruns counted and logged at every save (`overruns=N`), no free-space walk
+    inside the recording loop.
+  - App: strict IndexedDB durability before a device delete; the service worker precaches the bundle, so the app opens
+    offline after one visit (an e2e test covers it; it found and fixed a `Vary: Origin` cache miss).
+  - ESP32-C3 Super Mini target: `sdkconfig.defaults.esp32c3`, `partitions_4mb.csv`, push button on GPIO3, I2S on
+    GPIO5/6/7, blue LED on GPIO8 (active low), CI builds both targets. Wiring: `hardware/wiring-c3-supermini.md`.
 
 ## Next, in order
-1. **Port to the ESP32-C3 Super Mini** (the actual build). The user will wire it. This time with a **momentary push
-   button** (the `e32_button` push mode, `ESPEAK32_BUTTON_PUSH`), not the toggle switch. Check the C3 pins (I2S,
-   button, LED: the Super Mini has a plain blue LED on GPIO8, not an RGB one), add a C3 target/sdkconfig and a CI
-   build, then redo the M1/M2 bring-up on it.
-2. **App local to the phone**, not served from the PC: the PWA was tested at `https://kirves.tail4ddf7b.ts.net:8443/`
-   (tailscale serve, temporary). Make it installable and fully offline on Android (service worker, manifest), hosted
-   once (GitHub Pages: `pages.yml`, needs Pages enabled) and then run from the home screen; or package it. **Phone sync
-   works** (user, before 2026-11-12: app installed on the phone, notes synced and stored there); phone model, MTU and
-   KB/s were not recorded.
-3. Remaining M2 checks: two-phase delete (`espeak32 ble sync --delete`), bond reset (`unpair`).
-4. M3: transcription and summary through OpenRouter (`input_audio`), recordings UI, settings, offline queue. Spec
-   section 8; needs a live API key from the user for the format/size-limit spike (spec risk 5).
-5. M4 cassette build: ask the user for the shell's internal dimensions and photos of their charger/buck modules first.
+1. **Update the phone app before syncing firmware 0.3.0 notes.** An app older than file format v2 rejects v2 notes
+   (it skips them and does not delete them from the device, so nothing is lost). Serve the new build where the phone
+   installed it from and open the app online once.
+2. **C3 Super Mini bring-up.** The user wires it per `hardware/wiring-c3-supermini.md` (momentary push button on
+   GPIO3, INMP441 on GPIO5/6/7). Flash with `idf.py set-target esp32c3`, then run `docs/bringup-m1.md` and
+   `docs/bringup-m2.md`. Check: the LED polarity (self-test blinks, dark while idle), `overruns=0` on every save,
+   app size (`idf.py size`) and free heap with BLE up, phone sync.
+3. **Firmware 0.3.0 on the S3 too:** a note recorded until the storage is full must decode without the "not
+   finalized" warning, with `overruns=0`.
+4. Remaining M2 checks: two-phase delete (`espeak32 ble sync --delete`), bond reset (`unpair`).
+5. **Pairing only on demand** (decided 2026-11-12, see `docs/DECISIONS.md`): accept new bonds only in the 120 s
+   long-press window, not in the 60 s after every note. Needs the board to test; do it during the C3 bring-up.
+6. M3: transcription and summary through OpenRouter (`input_audio`), recordings UI, settings, offline queue. Spec
+   section 8; needs a live API key from the user for the format/size-limit spike (spec risk 5). Phone sync works
+   (user, before 2026-11-12); phone model, MTU and KB/s were not recorded.
+7. **Before deep sleep (M4), a clock that survives it:** today `boot_id` increments on every start and `start_us`
+   counts from boot, so once every wake is a boot, notes not synced in their own wake window show "unknown time".
+   Keep `boot_id` across deep-sleep wakes (`esp_reset_reason() == ESP_RST_DEEPSLEEP`) and take `start_us` and the
+   SET_TIME ticks from a clock that keeps running through deep sleep (the RTC-backed system time, `gettimeofday`).
+8. M4 cassette build: ask the user for the shell's internal dimensions and photos of their charger/buck modules first.
+   GitHub Pages hosting for the app (`pages.yml`, needs Pages enabled) remains the user's call.
 
 ## Rulings already made
 Later decisions are in `docs/DECISIONS.md`.
